@@ -43,6 +43,23 @@ def is_elevated() -> bool:
     return os.geteuid() == 0
 
 
+# platform.win32_edition() returns the registry EditionID, not the marketing name.
+_WINDOWS_EDITIONS = {
+    "Core": "Home",
+    "CoreN": "Home N",
+    "CoreSingleLanguage": "Home Single Language",
+    "CoreCountrySpecific": "Home China",
+    "Professional": "Pro",
+    "ProfessionalN": "Pro N",
+    "ProfessionalWorkstation": "Pro for Workstations",
+    "ProfessionalEducation": "Pro Education",
+}
+
+
+def windows_edition_name(edition_id: str) -> str:
+    return _WINDOWS_EDITIONS.get(edition_id, edition_id)
+
+
 def _linux_pretty_name() -> str:
     try:
         info = platform.freedesktop_os_release()
@@ -58,7 +75,7 @@ def collect() -> HostInfo:
         build = version.rsplit(".", 1)[-1] if version else ""
         # platform reports "10" for Windows 11 on older Pythons; build >= 22000 is Windows 11.
         name = "Windows 11" if build.isdigit() and int(build) >= 22000 else f"Windows {release}"
-        edition = platform.win32_edition() or ""
+        edition = windows_edition_name(platform.win32_edition() or "")
         os_name = f"{name} {edition}".strip()
         os_version = version
     elif fam == "macos":

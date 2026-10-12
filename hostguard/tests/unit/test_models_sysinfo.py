@@ -57,11 +57,24 @@ def test_elevation_posix(monkeypatch: pytest.MonkeyPatch) -> None:
     assert sysinfo.is_elevated() is True
 
 
-def test_windows_11_detection(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    ("release", "version", "edition_id", "expected"),
+    [
+        # Values reported by the target PC (Windows 11 Home 25H2) and by older Pythons.
+        ("11", "10.0.26200", "Core", "Windows 11 Home"),
+        ("10", "10.0.26200", "Core", "Windows 11 Home"),
+        ("10", "10.0.26100", "Professional", "Windows 11 Pro"),
+        ("10", "10.0.19045", "Professional", "Windows 10 Pro"),
+        ("11", "10.0.26200", "SomeFutureEdition", "Windows 11 SomeFutureEdition"),
+    ],
+)
+def test_windows_detection(
+    monkeypatch: pytest.MonkeyPatch, release: str, version: str, edition_id: str, expected: str
+) -> None:
     monkeypatch.setattr(sysinfo, "os_family", lambda: "windows")
     monkeypatch.setattr(sysinfo, "is_elevated", lambda: False)
-    monkeypatch.setattr(sysinfo.platform, "win32_ver", lambda: ("10", "10.0.26100", "", ""))
-    monkeypatch.setattr(sysinfo.platform, "win32_edition", lambda: "Professional")
+    monkeypatch.setattr(sysinfo.platform, "win32_ver", lambda: (release, version, "", ""))
+    monkeypatch.setattr(sysinfo.platform, "win32_edition", lambda: edition_id)
     h = sysinfo.collect()
-    assert h.os_name == "Windows 11 Professional"
-    assert h.os_build == "26100"
+    assert h.os_name == expected
+    assert h.os_build == version.rsplit(".", 1)[-1]

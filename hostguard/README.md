@@ -25,23 +25,28 @@ Commands from later phases already appear in `--help`, but they exit with code 2
 
 ## Install (Windows 11)
 
-You need Python 3.11 or newer (`py -0p` lists the installed versions) and [uv](https://docs.astral.sh/uv/). Nothing is installed outside the project folder.
+You need Python 3.11 or newer. Check with `py -0p`. Nothing is installed outside the project folder, and you don't need git, uv or admin rights.
+
+1. On GitHub, open the repo, switch to the `claude/dazzling-thompson-97srl7` branch, then choose **Code → Download ZIP**. Extract it, for example to `C:\Users\<you>\hostguard-src`.
+2. In a **normal** (not admin) PowerShell window:
 
 ```powershell
-git clone https://github.com/andersonhendrix07-bot/CSIT-2033.git
-cd CSIT-2033\hostguard
-uv sync --all-extras            # creates .venv with pinned dependencies (uv.lock)
-uv run hostguard info
-uv run pytest
+cd C:\Users\<you>\hostguard-src\CSIT-2033-claude-dazzling-thompson-97srl7\hostguard
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --require-hashes -r requirements-dev.lock
+.\.venv\Scripts\python.exe -m pip install --no-deps --no-build-isolation .
+.\.venv\Scripts\hostguard.exe info
+.\.venv\Scripts\python.exe -m pytest
 ```
 
-Without uv, use plain pip. Direct dependencies are pinned in `pyproject.toml`, but sub-dependencies are not; only `uv.lock` pins the whole tree with hashes:
+How the lock files work:
+- `--require-hashes` makes pip refuse any package whose SHA-256 doesn't match the lock file.
+- `requirements.lock` has only the runtime packages. `requirements-dev.lock` adds pytest, ruff and mypy.
+- Both files are generated from `uv.lock`.
 
-```powershell
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -e ".[keyring]" pytest==9.1.1 ruff==0.17.0 mypy==2.4.0
-```
+The commands call the venv's programs directly, so you don't need `Activate.ps1`. That script is blocked by PowerShell's default execution policy, and hostguard never asks you to change that policy.
+
+If you install [uv](https://docs.astral.sh/uv/) later, `uv sync --all-extras` then `uv run hostguard info` does the same thing.
 
 Run it **unelevated**. hostguard never needs Administrator rights to work. Checks that do need them are reported as "Skipped: requires admin".
 
@@ -104,6 +109,9 @@ src/hostguard/
 
 ```bash
 uv run pytest            # tests; real network access makes a test fail
+# after changing dependencies, regenerate the hashed pip lock files:
+uv export --all-extras --no-dev --group build --no-emit-project -o requirements.lock
+uv export --all-extras --group build --no-emit-project -o requirements-dev.lock
 uv run ruff check . && uv run ruff format --check .
 uv run mypy
 ```
@@ -111,4 +119,4 @@ uv run mypy
 ## Limitations (current)
 
 - Only `info` and `config` work so far.
-- Development and testing happen on Linux (Ubuntu 24.04). The Windows-specific code paths in `sysinfo.py` (Windows 11 detection, `IsUserAnAdmin`) are covered by mocked tests only until they have been run on a real Windows 11 machine.
+- Development and testing happen on Linux (Ubuntu 24.04). The Windows-specific code paths in `sysinfo.py` (Windows 11 edition and build detection, `IsUserAnAdmin`) are covered by mocked tests built from the target PC's real values (Windows 11 Home, build 26200), but haven't yet run on Windows itself.

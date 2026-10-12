@@ -17,3 +17,10 @@ Short records of key choices and why they were made. Newest at the bottom.
 7. **Findings without evidence cannot be built.** `Finding.__post_init__` raises when `evidence` is empty, which enforces the "no claim without evidence" rule in the type itself.
 
 8. **Pinned dependencies via `uv.lock`.** It includes hashes for the whole dependency tree. Direct dependencies are also pinned exactly in `pyproject.toml`.
+
+9. **Target is Windows 11 Home (build 26200), run unelevated, with Defender fully on.** This came from recon on the user's PC. As a result:
+   - Pro-only features (BitLocker management, gpedit, the RDP host) are reported as "not applicable on Home", not as failures.
+   - EICAR is only ever built in memory, because real-time protection would quarantine it on disk.
+   - The edition is shown by its marketing name (`Core` → `Home`).
+
+10. **Install path without git or uv.** The PC had neither. A hashed `requirements*.lock` exported from `uv.lock` gives pip the same pinned, hash-checked dependency tree. hatchling is in the lock (`build` group), so hostguard installs with `--no-build-isolation` and no unpinned build downloads. It is a regular install, not an editable one, because editable installs would need another build package.
