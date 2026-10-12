@@ -44,6 +44,21 @@ jobs:
       - name: CLI smoke test
         run: |
           ${{ runner.os == 'Windows' && '.\.venv\Scripts\hostguard.exe' || './.venv/bin/hostguard' }} --no-color info
+      # Real (not mocked) inventory and audit on the runner. Exit code 1 means
+      # "findings" and is expected on a CI machine; 2 (error) fails the job.
+      - name: Live inventory and audit smoke test
+        shell: pwsh
+        run: |
+          $hg = if ($IsWindows) { '.\.venv\Scripts\hostguard.exe' } else { './.venv/bin/hostguard' }
+          & $hg --no-color inventory --json inventory.json
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          & $hg --no-color -v audit --json audit.json
+          if ($LASTEXITCODE -gt 1) { exit 1 }
+          $a = Get-Content audit.json -Raw | ConvertFrom-Json
+          $a.checks | Format-Table id,status,severity,detail -AutoSize -Wrap
+          $errors = @($a.checks | Where-Object { $_.status -eq 'error' })
+          if ($errors.Count -gt 0) { Write-Error "audit checks errored: $($errors.id -join ', ')"; exit 1 }
+          exit 0
       - name: Tests
         run: ${{ runner.os == 'Windows' && '.\.venv\Scripts\python.exe' || './.venv/bin/python' }} -m pytest -ra
       - name: Lint and types
