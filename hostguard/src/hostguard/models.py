@@ -1,0 +1,102 @@
+"""Core data types shared by every module (findings, evidence, verdicts, exit codes)."""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+from enum import Enum, IntEnum
+from typing import Any
+
+
+class ExitCode(IntEnum):
+    """Process exit codes: 0 clean, 1 findings, 2 error."""
+
+    CLEAN = 0
+    FINDINGS = 1
+    ERROR = 2
+
+
+class Severity(str, Enum):
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+    INFO = "info"
+
+    @property
+    def rank(self) -> int:
+        """Lower is more severe; used for sorting."""
+        return list(Severity).index(self)
+
+
+class Confidence(str, Enum):
+    CONFIRMED = "Confirmed"
+    LIKELY = "Likely"
+    NEEDS_VERIFICATION = "Needs verification"
+
+
+class Verdict(str, Enum):
+    MALICIOUS = "malicious"
+    SUSPICIOUS = "suspicious"
+    CLEAN = "clean"
+    SKIPPED = "skipped"
+    ERROR = "error"
+
+
+class CheckStatus(str, Enum):
+    """Outcome of a configuration-audit check."""
+
+    PASS = "pass"
+    FAIL = "fail"
+    SKIPPED = "skipped"  # e.g. "requires admin"; never reported as a failure
+    ERROR = "error"
+
+
+def utc_now() -> str:
+    return datetime.now(UTC).isoformat(timespec="seconds")
+
+
+@dataclass(frozen=True)
+class Evidence:
+    """Exactly where a claim came from and what it showed."""
+
+    source: str  # command line, registry path, file path, or API URL
+    output: str  # the relevant excerpt (already truncated by the producer)
+    collected_at: str = field(default_factory=utc_now)
+
+
+@dataclass
+class VulnInfo:
+    cve: str
+    cvss: float | None = None
+    cvss_vector: str | None = None
+    epss: float | None = None
+    kev: bool = False
+
+
+@dataclass
+class Finding:
+    """One reportable item. Every field is meant to be shown to the user."""
+
+    id: str
+    title: str
+    severity: Severity
+    confidence: Confidence
+    component: str
+    evidence: list[Evidence]
+    remediation: str
+    references: list[str]
+    retest: str
+    category: str = "general"  # "vuln" | "audit" | "malware" | ...
+    vulns: list[VulnInfo] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if not self.evidence:
+            # Honesty rule: no finding without evidence.
+            raise ValueError(f"finding {self.id!r} has no evidence")
+
+    def to_dict(self) -> dict[str, Any]:
+        d = asdict(self)
+        d["severity"] = self.severity.value
+        d["confidence"] = self.confidence.value
+        return d
