@@ -7,17 +7,31 @@ import json
 import logging
 import sys
 from collections.abc import Callable, Sequence
+from contextlib import nullcontext
+from datetime import timedelta
 from pathlib import Path
 
 from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    TaskID,
+    TextColumn,
+    TimeElapsedColumn,
+)
 from rich.table import Table
 
-from hostguard import __version__, sysinfo
+from hostguard import __version__, inventory, output, sysinfo
+from hostguard.audit import AuditContext, run_checks
 from hostguard.config import DEFAULT_CONFIG_TOML, Config, ConfigError, load_config, to_toml
-from hostguard.credentials import secret_status
+from hostguard.credentials import get_secret, secret_status
 from hostguard.logsetup import get_logger, setup_logging
-from hostguard.models import ExitCode
+from hostguard.models import CheckStatus, ExitCode, Severity
+from hostguard.net import HttpClient, JsonCache
 from hostguard.paths import AppPaths, get_paths
+from hostguard.vulns import matcher
+from hostguard.winsys import RealPowerShell, WinRegistry
 
 log = get_logger("cli")
 
@@ -28,8 +42,6 @@ DISCLAIMER = (
 
 # Commands that exist in the plan but are delivered in later phases.
 PLANNED: dict[str, tuple[str, str]] = {
-    "vulns": ("Phase 2", "Inventory software and match known vulnerabilities"),
-    "audit": ("Phase 2", "Read-only configuration audit"),
     "scan": ("Phase 3", "Malware scan (quick | full | custom paths)"),
     "quarantine": ("Phase 4", "List, restore or delete quarantined files"),
     "update": ("Phase 4", "Refresh rules, signatures and hash sets"),
@@ -39,12 +51,20 @@ PLANNED: dict[str, tuple[str, str]] = {
 
 class Context:
     def __init__(
-        self, paths: AppPaths, config: Config, console: Console, config_path: Path
+        self,
+        paths: AppPaths,
+        config: Config,
+        console: Console,
+        config_path: Path,
+        verbose: int = 0,
+        quiet: bool = False,
     ) -> None:
         self.paths = paths
         self.config = config
         self.console = console
         self.config_path = config_path
+        self.verbose = verbose
+        self.quiet = quiet
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -70,10 +90,39 @@ def build_parser() -> argparse.ArgumentParser:
     init = cfg_sub.add_parser("init", help="Write a commented default config file")
     init.add_argument("--force", action="store_true", help="overwrite an existing file")
 
+    inv = sub.add_parser("inventory", help="List OS, software, listening ports and startup entries")
+    _add_env_and_json(inv)
+
+    vul = sub.add_parser("vulns", help="Match installed software against known vulnerabilities")
+    _add_env_and_json(vul)
+    vul.add_argument("--offline", action="store_true", help="use cached data only (warns if stale)")
+    vul.add_argument(
+        "--fuzzy",
+        action="store_true",
+        help="also keyword-match apps without a curated NVD mapping (results: Needs verification)",
+    )
+    vul.add_argument("--no-os", action="store_true", help="skip the Windows build check")
+    vul.add_argument("--no-apps", action="store_true", help="skip desktop apps (NVD)")
+    vul.add_argument("--top", type=int, default=10, help="details shown with -v (default 10)")
+
+    aud = sub.add_parser("audit", help="Read-only configuration audit with references")
+    aud.add_argument("--check", action="append", metavar="ID", help="run only these check IDs")
+    aud.add_argument("--json", type=Path, metavar="FILE", help="also write results as JSON")
+
     for name, (phase, help_text) in PLANNED.items():
         sp = sub.add_parser(name, help=f"{help_text} [{phase}]")
         sp.add_argument("rest", nargs=argparse.REMAINDER, help=argparse.SUPPRESS)
     return p
+
+
+def _add_env_and_json(sp: argparse.ArgumentParser) -> None:
+    sp.add_argument(
+        "--python-env",
+        action="append",
+        metavar="PATH",
+        help="Python environment (venv folder or site-packages) to inventory; repeatable",
+    )
+    sp.add_argument("--json", type=Path, metavar="FILE", help="also write results as JSON")
 
 
 def _kv_table(title: str) -> Table:
@@ -138,9 +187,119 @@ def cmd_planned(ctx: Context, args: argparse.Namespace) -> ExitCode:
     return ExitCode.ERROR
 
 
+def _envs(ctx: Context, args: argparse.Namespace) -> list[str]:
+    return list(ctx.config.vulns.python_envs) + list(args.python_env or [])
+
+
+def _progress(ctx: Context) -> tuple[Progress, Callable[[str, int, int], None]]:
+    prog = Progress(
+        TextColumn("{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+        console=Console(stderr=True, no_color=ctx.console.no_color),
+        transient=True,
+        disable=ctx.quiet,
+    )
+    tasks: dict[str, TaskID] = {}
+
+    def update(step: str, done: int, total: int) -> None:
+        if step not in tasks:
+            tasks[step] = prog.add_task(step, total=total or None)
+        prog.update(tasks[step], completed=done, total=total or None)
+
+    return prog, update
+
+
+def cmd_inventory(ctx: Context, args: argparse.Namespace) -> ExitCode:
+    with ctx.console.status("Collecting inventory…") if not ctx.quiet else nullcontext():
+        inv = inventory.collect(_envs(ctx, args))
+    output.print_inventory(ctx.console, inv, ctx.verbose)
+    if args.json:
+        output.write_json(args.json, output.inventory_json(inv, sysinfo.collect()))
+        ctx.console.print(f"JSON written to {args.json}", markup=False, highlight=False)
+    return ExitCode.CLEAN
+
+
+def cmd_vulns(ctx: Context, args: argparse.Namespace) -> ExitCode:
+    offline = args.offline or ctx.config.vulns.offline
+    key = get_secret("NVD_API_KEY")
+    key_state = (
+        f"set ({key.source})"
+        if key
+        else "not set (NVD lookups are paced at 1 request / 6 s; see README to add a key)"
+    )
+    with ctx.console.status("Collecting inventory…") if not ctx.quiet else nullcontext():
+        inv = inventory.collect(_envs(ctx, args), persistence=False, listeners=False)
+    ttl = timedelta(hours=ctx.config.vulns.cache_ttl_hours)
+    prog, update = _progress(ctx)
+    with HttpClient(JsonCache(ctx.paths.cache_dir), offline=offline) as http, prog:
+        res = matcher.scan(
+            inv,
+            http,
+            nvd_key=key,
+            ttl=ttl,
+            fuzzy=args.fuzzy,
+            include_os=not args.no_os,
+            include_apps=not args.no_apps,
+            progress=update,
+        )
+        stale = http.stale_sources()
+    output.print_vulns(ctx.console, res, key_state, args.top, ctx.verbose)
+    output.print_stale(ctx.console, stale)
+    if args.json:
+        output.write_json(args.json, output.vulns_json(res, sysinfo.collect(), inv))
+        ctx.console.print(f"JSON written to {args.json}", markup=False, highlight=False)
+    if res.incomplete:
+        ctx.console.print(
+            f"[bold yellow]Incomplete:[/] lookups failed for {', '.join(res.incomplete)} "
+            "(see 'Skipped'). Absence of findings for those components does NOT mean they are safe."
+        )
+        if not res.findings:
+            return ExitCode.ERROR
+    return ExitCode.FINDINGS if res.findings else ExitCode.CLEAN
+
+
+def cmd_audit(ctx: Context, args: argparse.Namespace) -> ExitCode:
+    host = sysinfo.collect()
+    with ctx.console.status("Running read-only checks…") if not ctx.quiet else nullcontext():
+        inv = inventory.collect(software=host.os_family == "windows")
+        actx = AuditContext(
+            family=host.os_family,
+            elevated=host.elevated,
+            registry=WinRegistry() if host.os_family == "windows" else None,
+            powershell=RealPowerShell() if host.os_family == "windows" else None,
+            inventory=inv,
+            edition_id=_edition_id(),
+        )
+        results = run_checks(actx, args.check)
+    if not results:
+        log.error("no checks matched %s", args.check or "this OS")
+        return ExitCode.ERROR
+    output.print_audit(ctx.console, results, ctx.verbose)
+    if args.json:
+        output.write_json(args.json, output.audit_json(results, host, inv))
+        ctx.console.print(f"JSON written to {args.json}", markup=False, highlight=False)
+    actionable = [
+        r for r in results if r.status == CheckStatus.FAILED and r.severity != Severity.INFO
+    ]
+    return ExitCode.FINDINGS if actionable else ExitCode.CLEAN
+
+
+def _edition_id() -> str:
+    if sys.platform != "win32":
+        return ""
+    import platform
+
+    return platform.win32_edition() or ""
+
+
 HANDLERS: dict[str, Callable[[Context, argparse.Namespace], ExitCode]] = {
     "info": cmd_info,
     "config": cmd_config,
+    "inventory": cmd_inventory,
+    "vulns": cmd_vulns,
+    "audit": cmd_audit,
     **{name: cmd_planned for name in PLANNED},
 }
 
@@ -181,7 +340,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return ExitCode.ERROR
 
     log.debug("command=%s argv=%s", args.command, json.dumps(list(argv or sys.argv[1:])))
-    ctx = Context(paths, config, console, config_path)
+    ctx = Context(paths, config, console, config_path, args.verbose, args.quiet)
     try:
         return int(HANDLERS[args.command](ctx, args))
     except KeyboardInterrupt:

@@ -1,0 +1,574 @@
+{
+ "resultsPerPage": 3,
+ "startIndex": 0,
+ "totalResults": 15,
+ "format": "NVD_CVE",
+ "version": "2.0",
+ "timestamp": "2026-10-12T18:46:42.662",
+ "vulnerabilities": [
+  {
+   "cve": {
+    "id": "CVE-2024-11477",
+    "sourceIdentifier": "zdi-disclosures@trendmicro.com",
+    "published": "2024-11-22T21:15:08.613",
+    "lastModified": "2026-06-17T06:57:48.637",
+    "vulnStatus": "Modified",
+    "cveTags": [],
+    "descriptions": [
+     {
+      "lang": "en",
+      "value": "7-Zip Zstandard Decompression Integer Underflow Remote Code Execution Vulnerability. This vulnerability allows remote attackers to execute arbitrary code on affected installations of 7-Zip. Interaction with this library is required to exploit this vulnerability but attack vectors may vary depending on the implementation.\n\nThe specific flaw exists within the implementation of Zstandard decompression. The issue results from the lack of proper validation of user-supplied data, which can result in an integer underflow before writing to memory. An attacker can leverage this vulnerability to execute code in the context of the current process. Was ZDI-CAN-24346."
+     },
+     {
+      "lang": "es",
+      "value": "Vulnerabilidad de ejecuci\u00f3n remota de c\u00f3digo por desbordamiento de enteros en la descompresi\u00f3n Zstandard de 7-Zip. Esta vulnerabilidad permite a atacantes remotos ejecutar c\u00f3digo arbitrario en las instalaciones afectadas de 7-Zip. Se requiere la interacci\u00f3n con esta librer\u00eda para explotar esta vulnerabilidad, pero los vectores de ataque pueden variar seg\u00fan la implementaci\u00f3n. La falla espec\u00edfica existe dentro de la implementaci\u00f3n de la descompresi\u00f3n Zstandard. El problema es el resultado de la falta de una validaci\u00f3n adecuada de los datos proporcionados por el usuario, lo que puede provocar un desbordamiento de enteros antes de escribir en la memoria. Un atacante puede aprovechar esta vulnerabilidad para ejecutar c\u00f3digo en el contexto del proceso actual. Era ZDI-CAN-24346."
+     }
+    ],
+    "affected": [
+     {
+      "source": "zdi-disclosures@trendmicro.com",
+      "affectedData": [
+       {
+        "vendor": "7-Zip",
+        "product": "7-Zip",
+        "defaultStatus": "unknown",
+        "versions": [
+         {
+          "version": "24.06",
+          "status": "affected"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+      "affectedData": [
+       {
+        "vendor": "7-zip",
+        "product": "7zip",
+        "defaultStatus": "unknown",
+        "cpes": [
+         "cpe:2.3:a:7-zip:7zip:*:*:*:*:*:*:*:*"
+        ],
+        "versions": [
+         {
+          "version": "24.06",
+          "lessThan": "24.07",
+          "versionType": "custom",
+          "status": "affected"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "metrics": {
+     "cvssMetricV31": [
+      {
+       "source": "nvd@nist.gov",
+       "type": "Primary",
+       "cvssData": {
+        "version": "3.1",
+        "vectorString": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+        "baseScore": 7.8,
+        "baseSeverity": "HIGH",
+        "attackVector": "LOCAL",
+        "attackComplexity": "LOW",
+        "privilegesRequired": "NONE",
+        "userInteraction": "REQUIRED",
+        "scope": "UNCHANGED",
+        "confidentialityImpact": "HIGH",
+        "integrityImpact": "HIGH",
+        "availabilityImpact": "HIGH"
+       },
+       "exploitabilityScore": 1.8,
+       "impactScore": 5.9
+      }
+     ],
+     "cvssMetricV30": [
+      {
+       "source": "zdi-disclosures@trendmicro.com",
+       "type": "Secondary",
+       "cvssData": {
+        "version": "3.0",
+        "vectorString": "CVSS:3.0/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+        "baseScore": 7.8,
+        "baseSeverity": "HIGH",
+        "attackVector": "LOCAL",
+        "attackComplexity": "LOW",
+        "privilegesRequired": "NONE",
+        "userInteraction": "REQUIRED",
+        "scope": "UNCHANGED",
+        "confidentialityImpact": "HIGH",
+        "integrityImpact": "HIGH",
+        "availabilityImpact": "HIGH"
+       },
+       "exploitabilityScore": 1.8,
+       "impactScore": 5.9
+      }
+     ],
+     "ssvcV203": [
+      {
+       "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+       "ssvcData": {
+        "timestamp": "2024-11-30T04:55:53.034971Z",
+        "id": "CVE-2024-11477",
+        "options": [
+         {
+          "exploitation": "poc"
+         },
+         {
+          "automatable": "no"
+         },
+         {
+          "technicalImpact": "total"
+         }
+        ],
+        "role": "CISA Coordinator",
+        "version": "2.0.3"
+       }
+      }
+     ]
+    },
+    "weaknesses": [
+     {
+      "source": "zdi-disclosures@trendmicro.com",
+      "type": "Secondary",
+      "description": [
+       {
+        "lang": "en",
+        "value": "CWE-191"
+       }
+      ]
+     }
+    ],
+    "configurations": [
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:7-zip:7-zip:*:*:*:*:*:*:*:*",
+          "versionEndExcluding": "24.07",
+          "matchCriteriaId": "01AEC7B4-8443-4267-A0E3-3C41EDFFBB38"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "references": [
+     {
+      "url": "https://www.zerodayinitiative.com/advisories/ZDI-24-1532/",
+      "source": "zdi-disclosures@trendmicro.com",
+      "tags": [
+       "Third Party Advisory",
+       "VDB Entry"
+      ]
+     },
+     {
+      "url": "https://security.netapp.com/advisory/ntap-20250214-0007/",
+      "source": "af854a3a-2127-422b-91ae-364da2661108"
+     }
+    ]
+   }
+  },
+  {
+   "cve": {
+    "id": "CVE-2025-0411",
+    "sourceIdentifier": "zdi-disclosures@trendmicro.com",
+    "published": "2025-01-25T05:15:09.533",
+    "lastModified": "2026-06-17T08:26:25.627",
+    "vulnStatus": "Analyzed",
+    "cveTags": [],
+    "descriptions": [
+     {
+      "lang": "en",
+      "value": "7-Zip Mark-of-the-Web Bypass Vulnerability. This vulnerability allows remote attackers to bypass the Mark-of-the-Web protection mechanism on affected installations of 7-Zip. User interaction is required to exploit this vulnerability in that the target must visit a malicious page or open a malicious file.\n\nThe specific flaw exists within the handling of archived files. When extracting files from a crafted archive that bears the Mark-of-the-Web, 7-Zip does not propagate the Mark-of-the-Web to the extracted files. An attacker can leverage this vulnerability to execute arbitrary code in the context of the current user. Was ZDI-CAN-25456."
+     },
+     {
+      "lang": "es",
+      "value": "Vulnerabilidad de omisi\u00f3n de 7-Zip Mark-of-the-Web. Esta vulnerabilidad permite a atacantes remotos omitir el mecanismo de protecci\u00f3n de la marca de la Web en las instalaciones afectadas de 7-Zip. Se requiere la interacci\u00f3n del usuario para explotar esta vulnerabilidad, ya que el objetivo debe visitar una p\u00e1gina maliciosa o abrir un archivo malicioso. La falla espec\u00edfica existe en el manejo de archivos comprimidos. Al extraer archivos de un archivo comprimido manipulado que lleva la marca de la Web, 7-Zip no propaga la marca de la Web a los archivos extra\u00eddos. Un atacante puede aprovechar esta vulnerabilidad para ejecutar c\u00f3digo arbitrario en el contexto del usuario actual. Era ZDI-CAN-25456."
+     }
+    ],
+    "affected": [
+     {
+      "source": "zdi-disclosures@trendmicro.com",
+      "affectedData": [
+       {
+        "vendor": "7-Zip",
+        "product": "7-Zip",
+        "defaultStatus": "unknown",
+        "versions": [
+         {
+          "version": "24.08 (x64)",
+          "status": "affected"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "metrics": {
+     "cvssMetricV31": [
+      {
+       "source": "nvd@nist.gov",
+       "type": "Primary",
+       "cvssData": {
+        "version": "3.1",
+        "vectorString": "CVSS:3.1/AV:L/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:H",
+        "baseScore": 7.0,
+        "baseSeverity": "HIGH",
+        "attackVector": "LOCAL",
+        "attackComplexity": "HIGH",
+        "privilegesRequired": "NONE",
+        "userInteraction": "REQUIRED",
+        "scope": "UNCHANGED",
+        "confidentialityImpact": "HIGH",
+        "integrityImpact": "HIGH",
+        "availabilityImpact": "HIGH"
+       },
+       "exploitabilityScore": 1.0,
+       "impactScore": 5.9
+      }
+     ],
+     "cvssMetricV30": [
+      {
+       "source": "zdi-disclosures@trendmicro.com",
+       "type": "Secondary",
+       "cvssData": {
+        "version": "3.0",
+        "vectorString": "CVSS:3.0/AV:L/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:H",
+        "baseScore": 7.0,
+        "baseSeverity": "HIGH",
+        "attackVector": "LOCAL",
+        "attackComplexity": "HIGH",
+        "privilegesRequired": "NONE",
+        "userInteraction": "REQUIRED",
+        "scope": "UNCHANGED",
+        "confidentialityImpact": "HIGH",
+        "integrityImpact": "HIGH",
+        "availabilityImpact": "HIGH"
+       },
+       "exploitabilityScore": 1.0,
+       "impactScore": 5.9
+      }
+     ],
+     "ssvcV203": [
+      {
+       "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+       "ssvcData": {
+        "timestamp": "2025-02-07T04:55:28.684912Z",
+        "id": "CVE-2025-0411",
+        "options": [
+         {
+          "exploitation": "active"
+         },
+         {
+          "automatable": "no"
+         },
+         {
+          "technicalImpact": "total"
+         }
+        ],
+        "role": "CISA Coordinator",
+        "version": "2.0.3"
+       }
+      }
+     ]
+    },
+    "cisaExploitAdd": "2025-02-06",
+    "cisaActionDue": "2025-02-27",
+    "cisaRequiredAction": "Apply mitigations per vendor instructions or discontinue use of the product if mitigations are unavailable.",
+    "cisaVulnerabilityName": "7-Zip Mark of the Web Bypass Vulnerability",
+    "weaknesses": [
+     {
+      "source": "zdi-disclosures@trendmicro.com",
+      "type": "Secondary",
+      "description": [
+       {
+        "lang": "en",
+        "value": "CWE-693"
+       }
+      ]
+     },
+     {
+      "source": "nvd@nist.gov",
+      "type": "Primary",
+      "description": [
+       {
+        "lang": "en",
+        "value": "NVD-CWE-noinfo"
+       }
+      ]
+     }
+    ],
+    "configurations": [
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:netapp:active_iq_unified_manager:-:*:*:*:*:windows:*:*",
+          "matchCriteriaId": "B55E8D50-99B4-47EC-86F9-699B67D473CE"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:7-zip:7-zip:*:*:*:*:*:*:*:*",
+          "versionEndExcluding": "24.09",
+          "matchCriteriaId": "AAFF445C-96F1-4328-A34E-A8C392B34BF3"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "references": [
+     {
+      "url": "https://www.zerodayinitiative.com/advisories/ZDI-25-045/",
+      "source": "zdi-disclosures@trendmicro.com",
+      "tags": [
+       "Third Party Advisory",
+       "VDB Entry"
+      ]
+     },
+     {
+      "url": "http://www.openwall.com/lists/oss-security/2025/01/24/6",
+      "source": "af854a3a-2127-422b-91ae-364da2661108",
+      "tags": [
+       "Mailing List"
+      ]
+     },
+     {
+      "url": "https://security.netapp.com/advisory/ntap-20250207-0005/",
+      "source": "af854a3a-2127-422b-91ae-364da2661108",
+      "tags": [
+       "Third Party Advisory"
+      ]
+     },
+     {
+      "url": "https://www.vicarius.io/vsociety/posts/cve-2025-0411-7-zip-mitigation-vulnerability",
+      "source": "af854a3a-2127-422b-91ae-364da2661108",
+      "tags": [
+       "Mitigation"
+      ]
+     },
+     {
+      "url": "https://www.vicarius.io/vsociety/posts/cve-2025-0411-detection-7-zip-vulnerability",
+      "source": "af854a3a-2127-422b-91ae-364da2661108",
+      "tags": [
+       "Mitigation"
+      ]
+     },
+     {
+      "url": "https://www.cisa.gov/known-exploited-vulnerabilities-catalog?field_cve=CVE-2025-0411",
+      "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+      "tags": [
+       "US Government Resource"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "cve": {
+    "id": "CVE-2025-53816",
+    "sourceIdentifier": "security-advisories@github.com",
+    "published": "2025-07-17T19:15:25.170",
+    "lastModified": "2026-06-17T09:38:58.613",
+    "vulnStatus": "Modified",
+    "cveTags": [],
+    "descriptions": [
+     {
+      "lang": "en",
+      "value": "7-Zip is a file archiver with a high compression ratio. Zeroes written outside heap buffer in RAR5 handler may lead to memory corruption and denial of service in versions of 7-Zip prior to 25.0.0. Version 25.0.0 contains a fix for the issue."
+     },
+     {
+      "lang": "es",
+      "value": "7-Zip es un archivador de archivos con una alta tasa de compresi\u00f3n. Los ceros escritos fuera del b\u00fafer de memoria en el controlador RAR5 pueden provocar corrupci\u00f3n de memoria y denegaci\u00f3n de servicio en versiones de 7-Zip anteriores a la 25.0.0. La versi\u00f3n 25.0.0 contiene una soluci\u00f3n para este problema."
+     }
+    ],
+    "affected": [
+     {
+      "source": "security-advisories@github.com",
+      "affectedData": [
+       {
+        "vendor": "ipavlov",
+        "product": "7-Zip",
+        "versions": [
+         {
+          "version": "< 25.0.0",
+          "status": "affected"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "metrics": {
+     "cvssMetricV40": [
+      {
+       "source": "security-advisories@github.com",
+       "type": "Secondary",
+       "cvssData": {
+        "version": "4.0",
+        "vectorString": "CVSS:4.0/AV:L/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N/E:P/CR:X/IR:X/AR:X/MAV:X/MAC:X/MAT:X/MPR:X/MUI:X/MVC:X/MVI:X/MVA:X/MSC:X/MSI:X/MSA:X/S:X/AU:X/R:X/V:X/RE:X/U:X",
+        "baseScore": 5.5,
+        "baseSeverity": "MEDIUM",
+        "attackVector": "LOCAL",
+        "attackComplexity": "LOW",
+        "attackRequirements": "NONE",
+        "privilegesRequired": "NONE",
+        "userInteraction": "NONE",
+        "vulnConfidentialityImpact": "NONE",
+        "vulnIntegrityImpact": "NONE",
+        "vulnAvailabilityImpact": "HIGH",
+        "subConfidentialityImpact": "NONE",
+        "subIntegrityImpact": "NONE",
+        "subAvailabilityImpact": "NONE",
+        "exploitMaturity": "PROOF_OF_CONCEPT",
+        "confidentialityRequirement": "NOT_DEFINED",
+        "integrityRequirement": "NOT_DEFINED",
+        "availabilityRequirement": "NOT_DEFINED",
+        "modifiedAttackVector": "NOT_DEFINED",
+        "modifiedAttackComplexity": "NOT_DEFINED",
+        "modifiedAttackRequirements": "NOT_DEFINED",
+        "modifiedPrivilegesRequired": "NOT_DEFINED",
+        "modifiedUserInteraction": "NOT_DEFINED",
+        "modifiedVulnConfidentialityImpact": "NOT_DEFINED",
+        "modifiedVulnIntegrityImpact": "NOT_DEFINED",
+        "modifiedVulnAvailabilityImpact": "NOT_DEFINED",
+        "modifiedSubConfidentialityImpact": "NOT_DEFINED",
+        "modifiedSubIntegrityImpact": "NOT_DEFINED",
+        "modifiedSubAvailabilityImpact": "NOT_DEFINED",
+        "Safety": "NOT_DEFINED",
+        "Automatable": "NOT_DEFINED",
+        "Recovery": "NOT_DEFINED",
+        "valueDensity": "NOT_DEFINED",
+        "vulnerabilityResponseEffort": "NOT_DEFINED",
+        "providerUrgency": "NOT_DEFINED"
+       }
+      }
+     ],
+     "cvssMetricV31": [
+      {
+       "source": "nvd@nist.gov",
+       "type": "Primary",
+       "cvssData": {
+        "version": "3.1",
+        "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+        "baseScore": 7.5,
+        "baseSeverity": "HIGH",
+        "attackVector": "NETWORK",
+        "attackComplexity": "LOW",
+        "privilegesRequired": "NONE",
+        "userInteraction": "NONE",
+        "scope": "UNCHANGED",
+        "confidentialityImpact": "NONE",
+        "integrityImpact": "NONE",
+        "availabilityImpact": "HIGH"
+       },
+       "exploitabilityScore": 3.9,
+       "impactScore": 3.6
+      }
+     ],
+     "ssvcV203": [
+      {
+       "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+       "ssvcData": {
+        "timestamp": "2025-07-17T20:25:13.387100Z",
+        "id": "CVE-2025-53816",
+        "options": [
+         {
+          "exploitation": "none"
+         },
+         {
+          "automatable": "no"
+         },
+         {
+          "technicalImpact": "partial"
+         }
+        ],
+        "role": "CISA Coordinator",
+        "version": "2.0.3"
+       }
+      }
+     ]
+    },
+    "weaknesses": [
+     {
+      "source": "security-advisories@github.com",
+      "type": "Secondary",
+      "description": [
+       {
+        "lang": "en",
+        "value": "CWE-122"
+       }
+      ]
+     }
+    ],
+    "configurations": [
+     {
+      "nodes": [
+       {
+        "operator": "OR",
+        "negate": false,
+        "cpeMatch": [
+         {
+          "vulnerable": true,
+          "criteria": "cpe:2.3:a:7-zip:7-zip:*:*:*:*:*:*:*:*",
+          "versionEndExcluding": "25.00",
+          "matchCriteriaId": "309F5F49-CD93-4F51-B45D-F8E29B5C14E3"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "references": [
+     {
+      "url": "https://securitylab.github.com/advisories/GHSL-2025-058_7-Zip/",
+      "source": "security-advisories@github.com",
+      "tags": [
+       "Exploit",
+       "Third Party Advisory"
+      ]
+     },
+     {
+      "url": "https://www.openwall.com/lists/oss-security/2025/07/18/1",
+      "source": "security-advisories@github.com",
+      "tags": [
+       "Exploit",
+       "Mailing List"
+      ]
+     },
+     {
+      "url": "http://www.openwall.com/lists/oss-security/2025/07/18/1",
+      "source": "af854a3a-2127-422b-91ae-364da2661108"
+     },
+     {
+      "url": "https://lists.debian.org/debian-lts-announce/2026/05/msg00021.html",
+      "source": "af854a3a-2127-422b-91ae-364da2661108"
+     }
+    ]
+   }
+  }
+ ]
+}

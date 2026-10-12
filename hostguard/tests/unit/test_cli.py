@@ -86,3 +86,34 @@ def test_info_never_truncates_long_paths(
     # The wrapped log path, with table borders and wrapping removed, is complete.
     flat = "".join(ch for ch in out if ch not in "│|\n ")
     assert str(deep / "logs" / "hostguard.log").replace(" ", "") in flat
+
+
+def test_vulns_offline_without_cache_is_error_not_clean(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Regression: an incomplete scan with no findings must exit 2, never 0 ('clean')."""
+    from hostguard import inventory
+    from hostguard.inventory.models import Inventory, OsInfo, PythonPackage
+    from hostguard.models import Evidence
+
+    inv = Inventory(
+        os=OsInfo("linux", "Test", "1"),
+        python_packages=[PythonPackage("jinja2", "2.10", "/env", Evidence("file", "x"))],
+    )
+    monkeypatch.setattr(inventory, "collect", lambda *a, **k: inv)
+    assert main(["--no-color", "vulns", "--offline"]) == 2
+    out = capsys.readouterr().out
+    assert "Incomplete" in out and "does NOT mean" in out
+
+
+def test_audit_command_runs(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    rc = main(["--no-color", "audit", "--json", str(tmp_path / "a.json")])
+    assert rc in (0, 1)
+    import json as _json
+
+    data = _json.loads((tmp_path / "a.json").read_text(encoding="utf-8"))
+    assert data["command"] == "audit" and data["checks"]
+    for c in data["checks"]:
+        assert c["status"] in {"pass", "fail", "skipped", "n/a", "error"}
+        if c["status"] in {"skipped", "n/a", "error"}:
+            assert c["detail"], c["id"]  # every skip has a reason

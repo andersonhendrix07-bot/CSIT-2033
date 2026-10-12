@@ -49,6 +49,7 @@ class CheckStatus(StrEnum):
     PASSED = "pass"
     FAILED = "fail"
     SKIPPED = "skipped"  # e.g. "requires admin"; never reported as a failure
+    NOT_APPLICABLE = "n/a"  # e.g. a Remote Desktop host check on Windows Home
     ERROR = "error"
 
 
@@ -67,11 +68,26 @@ class Evidence:
 
 @dataclass
 class VulnInfo:
-    cve: str
+    """One vulnerability affecting a component, with prioritisation data."""
+
+    cve: str  # CVE ID, or the advisory ID when no CVE exists
+    advisory_id: str = ""  # e.g. GHSA-..., UBUNTU-CVE-..., or the CVE itself for NVD
+    summary: str = ""
     cvss: float | None = None
     cvss_vector: str | None = None
+    cvss_source: str = ""  # "NVD" or "computed from OSV vector"
     epss: float | None = None
+    epss_percentile: float | None = None
     kev: bool = False
+    kev_date_added: str = ""
+    kev_ransomware: str = ""
+    fixed_in: str = ""  # version that fixes it, when the data says so
+    distro_priority: str = ""  # e.g. Ubuntu priority when no CVSS exists
+    related: list[str] = field(default_factory=list)  # other advisories for the same CVE
+
+    def sort_key(self) -> tuple[int, float, float]:
+        """Ranking: known-exploited first, then EPSS, then CVSS (all descending)."""
+        return (0 if self.kev else 1, -(self.epss or 0.0), -(self.cvss or 0.0))
 
 
 @dataclass
