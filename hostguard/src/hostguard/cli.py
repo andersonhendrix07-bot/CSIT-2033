@@ -212,7 +212,7 @@ def _progress(ctx: Context) -> tuple[Progress, Callable[[str, int, int], None]]:
 
 
 def cmd_inventory(ctx: Context, args: argparse.Namespace) -> ExitCode:
-    with ctx.console.status("Collecting inventory…") if not ctx.quiet else nullcontext():
+    with ctx.console.status("Collecting inventory...") if not ctx.quiet else nullcontext():
         inv = inventory.collect(_envs(ctx, args))
     output.print_inventory(ctx.console, inv, ctx.verbose)
     if args.json:
@@ -229,7 +229,7 @@ def cmd_vulns(ctx: Context, args: argparse.Namespace) -> ExitCode:
         if key
         else "not set (NVD lookups are paced at 1 request / 6 s; see README to add a key)"
     )
-    with ctx.console.status("Collecting inventory…") if not ctx.quiet else nullcontext():
+    with ctx.console.status("Collecting inventory...") if not ctx.quiet else nullcontext():
         inv = inventory.collect(_envs(ctx, args), persistence=False, listeners=False)
     ttl = timedelta(hours=ctx.config.vulns.cache_ttl_hours)
     prog, update = _progress(ctx)
@@ -262,7 +262,7 @@ def cmd_vulns(ctx: Context, args: argparse.Namespace) -> ExitCode:
 
 def cmd_audit(ctx: Context, args: argparse.Namespace) -> ExitCode:
     host = sysinfo.collect()
-    with ctx.console.status("Running read-only checks…") if not ctx.quiet else nullcontext():
+    with ctx.console.status("Running read-only checks...") if not ctx.quiet else nullcontext():
         inv = inventory.collect(software=host.os_family == "windows")
         actx = AuditContext(
             family=host.os_family,

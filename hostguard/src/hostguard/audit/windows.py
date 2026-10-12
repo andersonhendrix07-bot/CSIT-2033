@@ -417,9 +417,21 @@ def encryption(ctx: AuditContext) -> Outcome:
     if not vols:
         return skipped("no BitLocker information returned", ev)
     v = vols[0]
+    status = _VOLUME_STATUS.get(str(v.get("VolumeStatus")), str(v.get("VolumeStatus")))
     if str(v.get("ProtectionStatus")).lower() in ("on", "1"):
-        return passed(f"{v.get('MountPoint')} protection is on ({v.get('VolumeStatus')})", ev)
-    return failed(f"{v.get('MountPoint')} is not protected ({v.get('VolumeStatus')})", ev)
+        return passed(f"{v.get('MountPoint')} protection is on ({status})", ev)
+    return failed(f"{v.get('MountPoint')} is not protected ({status})", ev)
+
+
+# Windows PowerShell 5.1 serialises these enums as numbers (seen on a real Windows runner).
+_VOLUME_STATUS = {
+    "0": "FullyDecrypted",
+    "1": "FullyEncrypted",
+    "2": "EncryptionInProgress",
+    "3": "DecryptionInProgress",
+    "4": "EncryptionPaused",
+    "5": "DecryptionPaused",
+}
 
 
 SECUREBOOT = r"SYSTEM\CurrentControlSet\Control\SecureBoot\State"

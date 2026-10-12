@@ -420,3 +420,15 @@ def test_macos_checks(tmp_path: Path) -> None:
     assert r["MAC-SIP-001"].status == CheckStatus.PASSED
     assert r["MAC-FW-001"].status == CheckStatus.SKIPPED  # tool not found in this fake
     assert r["MAC-UPD-001"].status == CheckStatus.SKIPPED
+
+
+def test_bitlocker_numeric_status_is_named() -> None:
+    """Values as returned by Windows PowerShell 5.1 on a real (CI) Windows machine."""
+    ps = recon_powershell(
+        **{"Get-BitLockerVolume": {"MountPoint": "C:", "VolumeStatus": 0, "ProtectionStatus": 0}}
+    )
+    r = results_by_id(win_ctx(ps=ps, elevated=True))["WIN-ENC-001"]
+    assert (
+        r.status == CheckStatus.FAILED
+        and r.outcome.detail == "C: is not protected (FullyDecrypted)"
+    )

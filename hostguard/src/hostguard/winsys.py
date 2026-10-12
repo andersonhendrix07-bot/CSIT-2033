@@ -138,7 +138,7 @@ def reg_evidence(hive: str, path: str, shown: dict[str, Any] | str) -> Evidence:
 
 def _short(obj: Any, limit: int = 2000) -> str:
     text = obj if isinstance(obj, str) else json.dumps(obj, default=str, ensure_ascii=False)
-    return text if len(text) <= limit else text[:limit] + " …[truncated]"
+    return text if len(text) <= limit else text[:limit] + " ...[truncated]"
 
 
 class PowerShell(Protocol):

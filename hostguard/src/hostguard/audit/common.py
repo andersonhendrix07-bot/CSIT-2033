@@ -39,12 +39,12 @@ def exposed(ctx: AuditContext) -> Outcome:
         return skipped("listening-port inventory not available")
     exposed = [x for x in inv.listeners if not x.loopback]
     lines = [
-        f"{x.protocol}/{x.port} on {x.address} — {x.process}" + (f" ({x.exe})" if x.exe else "")
+        f"{x.protocol}/{x.port} on {x.address} - {x.process}" + (f" ({x.exe})" if x.exe else "")
         for x in exposed
     ]
     ev = Evidence(
         "psutil.net_connections(kind='inet') (local socket table, no network scan)",
-        "\n".join(lines[:MAX_LISTED]) + ("\n…" if len(lines) > MAX_LISTED else "")
+        "\n".join(lines[:MAX_LISTED]) + ("\n..." if len(lines) > MAX_LISTED else "")
         if lines
         else "none",
     )
@@ -72,7 +72,7 @@ def user_writable_persistence(ctx: AuditContext) -> Outcome:
     lines = [f"[{p.kind}] {p.name}: {p.command} ({p.location})" for p in hits]
     ev = Evidence(
         "registry Run keys, Startup folders, services, scheduled tasks / cron, systemd, autostart",
-        "\n".join(lines[:MAX_LISTED]) + ("\n…" if len(lines) > MAX_LISTED else "")
+        "\n".join(lines[:MAX_LISTED]) + ("\n..." if len(lines) > MAX_LISTED else "")
         if lines
         else "none",
     )

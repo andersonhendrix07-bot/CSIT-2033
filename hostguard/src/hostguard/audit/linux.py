@@ -382,7 +382,9 @@ def world_writable(ctx: AuditContext) -> Outcome:
             hits.append("/" + str(p.relative_to(ctx.root)))
     ev = Evidence(
         f"filesystem walk of /{', /'.join(SYSTEM_DIRS)} (no symlinks followed)",
-        ", ".join(hits[:MAX_LISTED]) + (" …" if len(hits) > MAX_LISTED else "") if hits else "none",
+        ", ".join(hits[:MAX_LISTED]) + (" ..." if len(hits) > MAX_LISTED else "")
+        if hits
+        else "none",
     )
     if hits:
         return failed(f"{len(hits)} world-writable path(s) in system directories", ev)

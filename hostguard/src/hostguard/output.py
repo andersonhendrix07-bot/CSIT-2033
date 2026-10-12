@@ -150,7 +150,7 @@ def print_vulns(
     findings = res.findings
     counts = severity_counts(findings)
     console.print(
-        f"[bold]Vulnerabilities:[/] {len(findings)} affected component(s) — "
+        f"[bold]Vulnerabilities:[/] {len(findings)} affected component(s) - "
         + ", ".join(f"{k} {v}" for k, v in counts.items() if v)
         if findings
         else "[bold green]No known vulnerabilities found in the checked components.[/]"

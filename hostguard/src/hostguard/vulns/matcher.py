@@ -209,7 +209,7 @@ def _osv_components(
                 )
                 + " -> "
                 + ", ".join(ids[:30])
-                + (" …" if len(ids) > 30 else ""),
+                + (" ..." if len(ids) > 30 else ""),
             )
         )
         for vid in ids:
@@ -407,7 +407,7 @@ def _add_nvd(
     comp.evidence.append(
         Evidence(
             f"GET {NVD_CVES}?cpeName={cpe}&isVulnerable",
-            f"totalResults={total}: " + ", ".join(ids[:30]) + (" …" if len(ids) > 30 else ""),
+            f"totalResults={total}: " + ", ".join(ids[:30]) + (" ..." if len(ids) > 30 else ""),
         )
     )
     mine = vtuple(comp.version)
