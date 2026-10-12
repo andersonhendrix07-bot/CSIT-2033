@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
-from enum import Enum, IntEnum
+from enum import IntEnum, StrEnum
 from typing import Any
 
 
@@ -16,7 +16,7 @@ class ExitCode(IntEnum):
     ERROR = 2
 
 
-class Severity(str, Enum):
+class Severity(StrEnum):
     CRITICAL = "critical"
     HIGH = "high"
     MEDIUM = "medium"
@@ -29,13 +29,13 @@ class Severity(str, Enum):
         return list(Severity).index(self)
 
 
-class Confidence(str, Enum):
+class Confidence(StrEnum):
     CONFIRMED = "Confirmed"
     LIKELY = "Likely"
     NEEDS_VERIFICATION = "Needs verification"
 
 
-class Verdict(str, Enum):
+class Verdict(StrEnum):
     MALICIOUS = "malicious"
     SUSPICIOUS = "suspicious"
     CLEAN = "clean"
@@ -43,11 +43,11 @@ class Verdict(str, Enum):
     ERROR = "error"
 
 
-class CheckStatus(str, Enum):
+class CheckStatus(StrEnum):
     """Outcome of a configuration-audit check."""
 
-    PASS = "pass"
-    FAIL = "fail"
+    PASSED = "pass"
+    FAILED = "fail"
     SKIPPED = "skipped"  # e.g. "requires admin"; never reported as a failure
     ERROR = "error"
 
