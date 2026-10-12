@@ -60,6 +60,21 @@ def windows_edition_name(edition_id: str) -> str:
     return _WINDOWS_EDITIONS.get(edition_id, edition_id)
 
 
+# Server releases share NT 10.0 with client Windows; only the build tells them apart.
+_SERVER_BUILDS = {"14393": "2016", "17763": "2019", "20348": "2022", "26100": "2025"}
+
+
+def windows_product_name(release: str, build: str, edition_id: str) -> str:
+    """E.g. ("10", "26200", "Core") -> "Windows 11 Home"."""
+    if edition_id.startswith("Server"):
+        year = _SERVER_BUILDS.get(build, "")
+        edition = edition_id.removeprefix("Server")
+        return " ".join(p for p in ("Windows Server", year, edition) if p)
+    # platform reports "10" for Windows 11 on older Pythons; build >= 22000 is Windows 11.
+    name = "Windows 11" if build.isdigit() and int(build) >= 22000 else f"Windows {release}"
+    return f"{name} {windows_edition_name(edition_id)}".strip()
+
+
 def _linux_pretty_name() -> str:
     try:
         info = platform.freedesktop_os_release()
@@ -73,10 +88,7 @@ def collect() -> HostInfo:
     if fam == "windows":
         release, version, _csd, _ptype = platform.win32_ver()
         build = version.rsplit(".", 1)[-1] if version else ""
-        # platform reports "10" for Windows 11 on older Pythons; build >= 22000 is Windows 11.
-        name = "Windows 11" if build.isdigit() and int(build) >= 22000 else f"Windows {release}"
-        edition = windows_edition_name(platform.win32_edition() or "")
-        os_name = f"{name} {edition}".strip()
+        os_name = windows_product_name(release, build, platform.win32_edition() or "")
         os_version = version
     elif fam == "macos":
         os_name, os_version, build = "macOS", platform.mac_ver()[0], ""

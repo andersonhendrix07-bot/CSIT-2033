@@ -72,3 +72,17 @@ def test_module_entry_point(isolated_home: Path) -> None:
     )
     assert r.returncode == 0
     assert "hostguard 0.1.0" in r.stdout
+
+
+def test_info_never_truncates_long_paths(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    deep = tmp_path / ("very-long-folder-name-" * 6) / "home"
+    monkeypatch.setenv("HOSTGUARD_HOME", str(deep))
+    monkeypatch.setenv("COLUMNS", "60")
+    assert main(["--no-color", "info"]) == 0
+    out = capsys.readouterr().out
+    assert "…" not in out
+    # The wrapped log path, with table borders and wrapping removed, is complete.
+    flat = "".join(ch for ch in out if ch not in "│|\n ")
+    assert str(deep / "logs" / "hostguard.log").replace(" ", "") in flat

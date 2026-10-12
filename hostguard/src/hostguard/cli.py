@@ -76,10 +76,18 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _kv_table(title: str) -> Table:
+    """Two-column key/value table that wraps long values (paths) instead of truncating them."""
+    t = Table(title=title, show_header=False)
+    t.add_column(no_wrap=True)
+    t.add_column(overflow="fold")
+    return t
+
+
 def cmd_info(ctx: Context, _args: argparse.Namespace) -> ExitCode:
     host = sysinfo.collect()
     c = ctx.console
-    t = Table(title="Host", show_header=False)
+    t = _kv_table("Host")
     t.add_row("OS", f"{host.os_name} ({host.os_version})")
     t.add_row("Build", host.os_build or "-")
     t.add_row("Architecture", host.arch)
@@ -90,7 +98,7 @@ def cmd_info(ctx: Context, _args: argparse.Namespace) -> ExitCode:
     )
     c.print(t)
 
-    t2 = Table(title="hostguard", show_header=False)
+    t2 = _kv_table("hostguard")
     t2.add_row("Version", __version__)
     cfg_state = "exists" if ctx.config_path.exists() else "not created (defaults in use)"
     t2.add_row("Config file", f"{ctx.config_path} [{cfg_state}]")

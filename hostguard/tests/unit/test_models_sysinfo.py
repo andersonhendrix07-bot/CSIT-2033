@@ -66,6 +66,10 @@ def test_elevation_posix(monkeypatch: pytest.MonkeyPatch) -> None:
         ("10", "10.0.26100", "Professional", "Windows 11 Pro"),
         ("10", "10.0.19045", "Professional", "Windows 10 Pro"),
         ("11", "10.0.26200", "SomeFutureEdition", "Windows 11 SomeFutureEdition"),
+        # Seen on the GitHub Actions windows-latest runner (Windows Server 2025).
+        ("10", "10.0.26100", "ServerDatacenter", "Windows Server 2025 Datacenter"),
+        ("10", "10.0.20348", "ServerStandard", "Windows Server 2022 Standard"),
+        ("10", "10.0.99999", "ServerDatacenter", "Windows Server Datacenter"),
     ],
 )
 def test_windows_detection(
