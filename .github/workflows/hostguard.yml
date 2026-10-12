@@ -1,0 +1,53 @@
+name: hostguard
+
+on:
+  push:
+    paths: ["hostguard/**", ".github/workflows/hostguard.yml"]
+  pull_request:
+    paths: ["hostguard/**", ".github/workflows/hostguard.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hostguard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # windows-latest is the primary target (the user's PC is Windows 11 Home, Python 3.13).
+        os: [windows-latest, ubuntu-latest]
+        python: ["3.11", "3.13"]
+    defaults:
+      run:
+        working-directory: hostguard
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      # Same hash-checked install path the README gives Windows users.
+      - name: Install (hash-locked)
+        run: |
+          python -m venv .venv
+          ${{ runner.os == 'Windows' && '.\.venv\Scripts\python.exe' || './.venv/bin/python' }} -m pip install --require-hashes -r requirements-dev.lock
+          ${{ runner.os == 'Windows' && '.\.venv\Scripts\python.exe' || './.venv/bin/python' }} -m pip install --no-deps --no-build-isolation .
+      - name: CLI smoke test
+        run: |
+          ${{ runner.os == 'Windows' && '.\.venv\Scripts\hostguard.exe' || './.venv/bin/hostguard' }} --no-color info
+      - name: Tests
+        run: ${{ runner.os == 'Windows' && '.\.venv\Scripts\python.exe' || './.venv/bin/python' }} -m pytest -ra
+      - name: Lint and types
+        run: |
+          ${{ runner.os == 'Windows' && '.\.venv\Scripts\python.exe' || './.venv/bin/python' }} -m ruff check .
+          ${{ runner.os == 'Windows' && '.\.venv\Scripts\python.exe' || './.venv/bin/python' }} -m ruff format --check .
+          ${{ runner.os == 'Windows' && '.\.venv\Scripts\python.exe' || './.venv/bin/python' }} -m mypy
