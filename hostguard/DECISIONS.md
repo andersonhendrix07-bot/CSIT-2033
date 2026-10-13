@@ -75,3 +75,10 @@ Short records of key choices and why they were made. Newest at the bottom.
 25. **ClamAV stays local and optional.** hostguard never installs ClamAV. Only Unix sockets or loopback TCP addresses are accepted for clamd. `clamscan` runs once per scan with `--file-list` (built while walking), so hostile file names are never parsed as command-line options and the signature database loads only once.
 
 26. **VirusTotal is evidence, not a verdict.** It is off by default and only looks up hashes of files the local engines already flagged, up to 20 per run, respecting the documented public-API limits (4/min, 500/day, non-commercial). Files are never uploaded. Its result is shown next to the local verdict and never changes it.
+
+27. **Mocks are not enough for OS integrations; Windows CI runs them for real.** Three bugs passed every mocked test and were found only on real Windows runners:
+    - the Authenticode and dpkg allowlists were never attached to the scanner by the CLI;
+    - the signature script piped a `foreach` statement, which PowerShell refuses to parse;
+    - `powershell.exe` (5.1) started from PowerShell 7 inherits PowerShell 7's `PSModulePath`, then fails to load `Microsoft.PowerShell.Security`, so every signature check returned `Error`.
+
+    hostguard now starts Windows PowerShell without `PSModulePath`, so it uses its own modules. This matters on the user's PC too, because Windows Terminal's default profile is PowerShell 7. A Windows-only test calls the real `Get-AuthenticodeSignature` on System32 binaries, and every constant PowerShell script was parse-checked with PowerShell's own parser.
