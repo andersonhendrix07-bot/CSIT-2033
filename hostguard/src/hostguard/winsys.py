@@ -189,7 +189,7 @@ class RealPowerShell:
         if r.timed_out:
             raise PowerShellError("PowerShell timed out", ev)
         if r.returncode != 0:
-            raise PowerShellError(_first_line(r.stderr) or f"exit code {r.returncode}", ev)
+            raise PowerShellError(_error_summary(r.stderr) or f"exit code {r.returncode}", ev)
         text = r.stdout.strip()
         if not text:
             return None, ev
@@ -199,11 +199,19 @@ class RealPowerShell:
             raise PowerShellError("PowerShell did not return JSON", ev) from exc
 
 
-def _first_line(s: str) -> str:
-    for line in s.splitlines():
-        if line.strip():
-            return line.strip()[:300]
-    return ""
+def _error_summary(s: str) -> str:
+    """The message of a PowerShell error record, with its location when there is one.
+
+    Runtime errors start with the message; parser errors start with "At line:N char:M"
+    followed by a source excerpt ("+ ...") and only then the message.
+    """
+    lines = [ln.strip() for ln in s.splitlines() if ln.strip()]
+    if not lines:
+        return ""
+    if lines[0].startswith("At line:"):
+        msg = next((ln for ln in lines[1:] if not ln.startswith(("+", "At line:"))), "")
+        return f"{msg} ({lines[0]})"[:300] if msg else lines[0][:300]
+    return lines[0][:300]
 
 
 def as_list(data: Any) -> list[Any]:

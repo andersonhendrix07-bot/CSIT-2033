@@ -184,3 +184,17 @@ def test_collect_end_to_end_windows(monkeypatch: object) -> None:
     assert inv.software and inv.persistence is not None
     d = inv.to_dict()
     assert d["os"]["full_build"] == "26200.6899"
+
+
+def test_powershell_error_summary_finds_parser_message() -> None:
+    from hostguard.winsys import _error_summary
+
+    parser = (
+        "At line:1 char:434\r\n+ ... SignatureType} } | ConvertTo-Json -Compress\r\n"
+        "+                    ~\r\nAn empty pipe element is not allowed.\r\n"
+        "    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException\r\n"
+    )
+    assert _error_summary(parser) == "An empty pipe element is not allowed. (At line:1 char:434)"
+    runtime = "Get-Thing : Access is denied.\r\nAt line:1 char:5\r\n+ Get-Thing\r\n"
+    assert _error_summary(runtime) == "Get-Thing : Access is denied."
+    assert _error_summary("  \n") == ""

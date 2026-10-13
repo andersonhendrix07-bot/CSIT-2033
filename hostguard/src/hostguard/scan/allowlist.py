@@ -26,11 +26,15 @@ log = get_logger("scan.allowlist")
 
 # Constant script; the list of paths arrives on stdin as JSON data.
 PS_SIGNATURES = (
+    # A foreach statement cannot be piped directly; @(...) makes it an expression.
+    # One unreadable file must not abort the batch, hence the per-file try/catch.
     "$paths = [Console]::In.ReadToEnd() | ConvertFrom-Json; "
-    "foreach ($p in @($paths)) { $s = Get-AuthenticodeSignature -LiteralPath $p; "
+    "@(foreach ($p in @($paths)) { try { $s = Get-AuthenticodeSignature -LiteralPath $p; "
     "[pscustomobject]@{Path=$p; Status=[string]$s.Status; "
     "Subject=$(if ($s.SignerCertificate) { $s.SignerCertificate.Subject } else { '' }); "
-    "SignatureType=[string]$s.SignatureType} } | ConvertTo-Json -Compress"
+    "SignatureType=[string]$s.SignatureType} } "
+    "catch { [pscustomobject]@{Path=$p; Status='Error'; Subject=''; SignatureType=''} } }) "
+    "| ConvertTo-Json -Compress"
 )
 
 
