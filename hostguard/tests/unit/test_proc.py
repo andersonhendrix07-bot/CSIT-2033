@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -66,3 +67,10 @@ def test_executable_in_cwd_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPat
 def test_cmdline_is_evidence_friendly() -> None:
     r = proc.run([sys.executable, "-c", "pass"])
     assert "-c" in r.cmdline
+
+
+def test_env_is_passed_to_child() -> None:
+    env = {k: v for k, v in os.environ.items() if k != "HG_TEST_VAR"}
+    env["HG_TEST_VAR"] = "from-parent"
+    r = proc.run([sys.executable, "-c", "import os; print(os.environ.get('HG_TEST_VAR'))"], env=env)
+    assert r.stdout.strip() == "from-parent"

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from fakes import FakePowerShell, FakeRegistry
 from hostguard.inventory import Collectors, collect, windows
 from hostguard.inventory.models import Skip
@@ -198,3 +200,30 @@ def test_powershell_error_summary_finds_parser_message() -> None:
     runtime = "Get-Thing : Access is denied.\r\nAt line:1 char:5\r\n+ Get-Thing\r\n"
     assert _error_summary(runtime) == "Get-Thing : Access is denied."
     assert _error_summary("  \n") == ""
+
+
+def test_powershell_env_drops_inherited_module_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    from hostguard.winsys import powershell_env
+
+    monkeypatch.setenv("PSModulePath", r"C:\Program Files\PowerShell\7\Modules")
+    monkeypatch.setenv("SYSTEMROOT", r"C:\Windows")
+    env = powershell_env()
+    assert not any(k.upper() == "PSMODULEPATH" for k in env)
+    assert env["SYSTEMROOT"] == r"C:\Windows"
+
+
+def test_signature_error_reason_is_kept() -> None:
+    from hostguard.scan.allowlist import PS_SIGNATURES, windows_signatures
+
+    ps = FakePowerShell(
+        {
+            PS_SIGNATURES: {
+                "Path": r"C:\a.exe",
+                "Status": "Error",
+                "Error": "module could not be loaded",
+            }
+        }
+    )
+    out = windows_signatures([r"C:\a.exe"], ps, ["Microsoft Corporation"])
+    assert not out[r"C:\a.exe"].trusted
+    assert "module could not be loaded" in out[r"C:\a.exe"].detail

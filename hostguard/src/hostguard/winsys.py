@@ -182,7 +182,7 @@ class RealPowerShell:
             _PS_PREAMBLE + script,
         ]
         try:
-            r = proc.run(argv, timeout=timeout, input_data=stdin)
+            r = proc.run(argv, timeout=timeout, input_data=stdin, env=powershell_env())
         except proc.ToolNotFoundError as exc:
             raise PowerShellError(f"PowerShell not found: {exc}") from exc
         ev = Evidence(source=f"powershell: {script}", output=_short(r.stdout or r.stderr))
@@ -197,6 +197,17 @@ class RealPowerShell:
             return json.loads(text), ev
         except ValueError as exc:
             raise PowerShellError("PowerShell did not return JSON", ev) from exc
+
+
+def powershell_env() -> dict[str, str]:
+    """This process's environment without PSModulePath.
+
+    PowerShell 7 adds its own module folder to PSModulePath. Windows PowerShell 5.1
+    started from it inherits that and then fails to load modules that exist in both
+    versions (e.g. Microsoft.PowerShell.Security, which has Get-AuthenticodeSignature).
+    Without the variable, 5.1 uses its own default module path.
+    """
+    return {k: v for k, v in os.environ.items() if k.upper() != "PSMODULEPATH"}
 
 
 def _error_summary(s: str) -> str:

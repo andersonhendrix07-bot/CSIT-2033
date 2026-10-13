@@ -33,7 +33,8 @@ PS_SIGNATURES = (
     "[pscustomobject]@{Path=$p; Status=[string]$s.Status; "
     "Subject=$(if ($s.SignerCertificate) { $s.SignerCertificate.Subject } else { '' }); "
     "SignatureType=[string]$s.SignatureType} } "
-    "catch { [pscustomobject]@{Path=$p; Status='Error'; Subject=''; SignatureType=''} } }) "
+    "catch { [pscustomobject]@{Path=$p; Status='Error'; Subject=''; SignatureType=''; "
+    "Error=[string]$_.Exception.Message} } }) "
     "| ConvertTo-Json -Compress"
 )
 
@@ -80,7 +81,10 @@ def windows_signatures(
                 False, f"valid signature by {org or subject}, not on the trusted-publisher list"
             )
         else:
-            out[path] = Trust(False, f"signature status: {status or 'unknown'}")
+            err = str(d.get("Error") or "")[:200]
+            out[path] = Trust(
+                False, f"signature status: {status or 'unknown'}" + (f" ({err})" if err else "")
+            )
     return out
 
 

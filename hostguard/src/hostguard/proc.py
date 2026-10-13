@@ -16,7 +16,7 @@ import os
 import shutil
 import subprocess
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -65,7 +65,11 @@ def resolve_executable(name: str) -> str:
 
 
 def run(
-    argv: Sequence[str], *, timeout: float = DEFAULT_TIMEOUT, input_data: bytes | None = None
+    argv: Sequence[str],
+    *,
+    timeout: float = DEFAULT_TIMEOUT,
+    input_data: bytes | None = None,
+    env: Mapping[str, str] | None = None,
 ) -> ProcResult:
     if isinstance(argv, str | bytes) or not argv:
         raise TypeError("argv must be a non-empty sequence of strings, not a shell string")
@@ -88,6 +92,7 @@ def run(
             shell=False,
             check=False,
             creationflags=creationflags,
+            env=env,
         )
     except subprocess.TimeoutExpired as exc:
         out, t1 = _decode(exc.stdout)
