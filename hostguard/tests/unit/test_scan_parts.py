@@ -7,6 +7,7 @@ import bz2
 import gzip
 import io
 import json
+import os
 import socket
 import struct
 import sys
@@ -511,19 +512,27 @@ def test_windows_signature_trust_uses_os_validation_and_stdin() -> None:
 def test_dpkg_verifier(tmp_path: Path) -> None:
     import hashlib
 
+    # dpkg records POSIX paths relative to /, so this works the same on any OS.
     info = tmp_path / "info"
     info.mkdir()
-    f = tmp_path / "usr_bin_tool"
-    f.write_bytes(b"original")
     md5 = hashlib.md5(b"original", usedforsecurity=False).hexdigest()
-    (info / "tool.md5sums").write_text(f"{md5}  {str(f).lstrip('/')}\n", encoding="utf-8")
-    v = DpkgVerifier(info)
-    t = v.check(str(f))
+    (info / "tool.md5sums").write_text(f"{md5}  usr/bin/tool\n", encoding="utf-8")
+    t = DpkgVerifier(info).check("/usr/bin/tool", b"original")
     assert t is not None and t.trusted
-    f.write_bytes(b"tampered")
-    t = DpkgVerifier(info).check(str(f))
+    t = DpkgVerifier(info).check("/usr/bin/tool", b"tampered")
     assert t is not None and not t.trusted and "MODIFIED" in t.detail
-    assert DpkgVerifier(info).check("/not/owned") is None
+    assert DpkgVerifier(info).check("/not/owned", b"original") is None
+
+
+def test_allowlist_sources_are_wired_per_os(tmp_path: Path) -> None:
+    from hostguard.scan.factory import allowlist_sources
+    from hostguard.winsys import RealPowerShell
+
+    ps, dpkg = allowlist_sources("win32", tmp_path)
+    assert isinstance(ps, RealPowerShell) and dpkg is None
+    ps, dpkg = allowlist_sources("linux", tmp_path)
+    assert ps is None and isinstance(dpkg, DpkgVerifier)
+    assert allowlist_sources("darwin", tmp_path / "missing") == (None, None)
 
 
 def test_eicar_constant_integrity() -> None:
@@ -595,3 +604,20 @@ def test_virustotal_lookup_is_hash_only(tmp_path: Path) -> None:
     assert all(r.method == "GET" for r in seen)  # never uploads
     assert seen[0].headers["x-apikey"] == "vt-test-key-1234567890"
     assert "vt-test-key" not in str(seen[0].url)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="real Get-AuthenticodeSignature (Windows only)")
+def test_windows_signatures_live(tmp_path: Path) -> None:
+    from hostguard.winsys import RealPowerShell
+
+    system32 = Path(os.environ.get("SYSTEMROOT", r"C:\Windows")) / "System32"
+    signed = [str(system32 / "cmd.exe"), str(system32 / "kernel32.dll")]
+    unsigned = tmp_path / "unsigned.exe"
+    unsigned.write_bytes(b"MZ" + b"\0" * 62)
+    out = windows_signatures([*signed, str(unsigned)], RealPowerShell(), ["Microsoft Corporation"])
+    for p in signed:
+        assert out[p].trusted, out.get(p)
+    assert str(unsigned) not in out or not out[str(unsigned)].trusted
+    # A real Microsoft signature is not trusted when Microsoft is not on the list.
+    out = windows_signatures(signed[:1], RealPowerShell(), ["Example Corp"])
+    assert not out[signed[0]].trusted

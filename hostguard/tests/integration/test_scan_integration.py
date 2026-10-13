@@ -19,7 +19,7 @@ import pytest
 from hostguard.cli import main
 from hostguard.models import Confidence, Verdict
 from hostguard.scan import archive, factory, selftest
-from hostguard.scan.allowlist import DpkgVerifier
+from hostguard.scan.allowlist import DpkgVerifier, Trust
 from hostguard.scan.engines.yara_engine import YaraEngine
 from hostguard.scan.findings import item_to_finding
 from hostguard.scan.hashdb import HashDB
@@ -190,22 +190,20 @@ def test_unicode_and_long_names(tmp_path: Path) -> None:
     assert "<U+202E>" in flagged[0].to_dict()["path"]
 
 
-def test_allowlist_downgrades_only_heuristics(tmp_path: Path) -> None:
-    import hashlib
+class _TrustEverything(DpkgVerifier):
+    """Stands in for a package database that vouches for every file."""
 
+    def check(self, path: str, data: bytes | None = None) -> Trust | None:
+        return Trust(True, "test: vouched for by the package database")
+
+
+def test_allowlist_downgrades_only_heuristics(tmp_path: Path) -> None:
     script = tmp_path / "updater.ps1"
     script.write_bytes(selftest.synthetic_cradle())
     marker_and_heur = tmp_path / "both.ps1"
     marker_and_heur.write_bytes(selftest.synthetic_cradle() + MARKER)
-    info = tmp_path / "dpkg"
-    info.mkdir()
-    lines = [
-        f"{hashlib.md5(p.read_bytes(), usedforsecurity=False).hexdigest()}  {str(p).lstrip('/')}"
-        for p in (script, marker_and_heur)
-    ]
-    (info / "pkg.md5sums").write_text("\n".join(lines) + "\n", encoding="utf-8")
     sc = make_scanner(tmp_path)
-    sc.dpkg = DpkgVerifier(info)
+    sc.dpkg = _TrustEverything(tmp_path)
     res = sc.scan_paths([script, marker_and_heur], Exclusions([], []))
     # The heuristic-only hit is downgraded; the YARA match is never overridden.
     assert [i.path for i in res.flagged] == [str(marker_and_heur)]
