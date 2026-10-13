@@ -5,11 +5,13 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from collections.abc import Callable, Sequence
 from contextlib import nullcontext
 from datetime import timedelta
 from pathlib import Path
+from typing import Any
 
 from rich.console import Console
 from rich.progress import (
@@ -30,6 +32,13 @@ from hostguard.logsetup import get_logger, setup_logging
 from hostguard.models import CheckStatus, ExitCode, Severity
 from hostguard.net import HttpClient, JsonCache
 from hostguard.paths import AppPaths, get_paths
+from hostguard.scan import selftest
+from hostguard.scan.archive import Limits
+from hostguard.scan.factory import EngineSpec
+from hostguard.scan.factory import build as build_scanner
+from hostguard.scan.model import safe_display
+from hostguard.scan.scanner import ALL_ENGINES, ScanSettings
+from hostguard.scan.targets import Exclusions, full_targets, quick_targets
 from hostguard.vulns import matcher
 from hostguard.winsys import RealPowerShell, WinRegistry
 
@@ -42,7 +51,6 @@ DISCLAIMER = (
 
 # Commands that exist in the plan but are delivered in later phases.
 PLANNED: dict[str, tuple[str, str]] = {
-    "scan": ("Phase 3", "Malware scan (quick | full | custom paths)"),
     "quarantine": ("Phase 4", "List, restore or delete quarantined files"),
     "update": ("Phase 4", "Refresh rules, signatures and hash sets"),
     "report": ("Phase 5", "Write JSON / HTML / terminal reports"),
@@ -108,6 +116,40 @@ def build_parser() -> argparse.ArgumentParser:
     aud = sub.add_parser("audit", help="Read-only configuration audit with references")
     aud.add_argument("--check", action="append", metavar="ID", help="run only these check IDs")
     aud.add_argument("--json", type=Path, metavar="FILE", help="also write results as JSON")
+
+    sc = sub.add_parser(
+        "scan",
+        help="Malware scan: quick, full, or files/folders",
+        description="Scan for malware. TARGET is 'quick' (default), 'full', or one or more files/folders. "
+        "Files are only read, never executed. " + DISCLAIMER,
+    )
+    sc.add_argument("targets", nargs="*", metavar="TARGET", help="quick | full | PATH ...")
+    sc.add_argument(
+        "--selftest",
+        action="store_true",
+        help="prove detection with an in-memory EICAR test (no files written)",
+    )
+    sc.add_argument(
+        "--no-archives", action="store_true", help="do not look inside zip/tar/gz/bz2/xz files"
+    )
+    sc.add_argument(
+        "--workers",
+        type=int,
+        metavar="N",
+        help="scan processes (default: scan.hash_workers or auto)",
+    )
+    sc.add_argument(
+        "--engines",
+        default="hash,yara,clamav,heuristics",
+        help="comma-separated subset of: hash,yara,clamav,heuristics",
+    )
+    sc.add_argument(
+        "--virustotal",
+        action="store_true",
+        help="look up hashes of flagged files on VirusTotal (needs VT_API_KEY; never uploads)",
+    )
+    sc.add_argument("--json", type=Path, metavar="FILE", help="also write results as JSON")
+    sc.add_argument("--include-test-rules", action="store_true", help=argparse.SUPPRESS)
 
     for name, (phase, help_text) in PLANNED.items():
         sp = sub.add_parser(name, help=f"{help_text} [{phase}]")
@@ -286,6 +328,112 @@ def cmd_audit(ctx: Context, args: argparse.Namespace) -> ExitCode:
     return ExitCode.FINDINGS if actionable else ExitCode.CLEAN
 
 
+def _scan_settings(ctx: Context, args: argparse.Namespace) -> ScanSettings:
+    sc = ctx.config.scan
+    engines = tuple(e.strip() for e in args.engines.split(",") if e.strip())
+    bad = [e for e in engines if e not in ALL_ENGINES]
+    if bad:
+        raise ValueError(
+            f"unknown engine(s): {', '.join(bad)} (choose from {', '.join(ALL_ENGINES)})"
+        )
+    workers = args.workers or sc.hash_workers or min(4, os.cpu_count() or 1)
+    vt_key = None
+    if args.virustotal or ctx.config.cloud.virustotal_enabled:
+        vt_key = get_secret("VT_API_KEY")
+        if vt_key is None:
+            log.warning("VirusTotal lookups requested but VT_API_KEY is not set; skipping them")
+    return ScanSettings(
+        limits=Limits(
+            max_file_size=sc.max_file_size_mb * 2**20,
+            max_depth=0 if args.no_archives else sc.max_archive_depth,
+            max_total_decompressed=sc.max_decompressed_mb * 2**20,
+            max_ratio=sc.max_compression_ratio,
+        ),
+        workers=max(1, workers),
+        follow_symlinks=sc.follow_symlinks,
+        archives=not args.no_archives and sc.max_archive_depth > 0,
+        threshold=sc.heuristics_threshold,
+        engines=engines,
+        trusted_publishers=tuple(sc.trusted_publishers),
+        virustotal_key=vt_key,
+        virustotal_max=ctx.config.cloud.virustotal_max_lookups,
+    )
+
+
+def cmd_scan(ctx: Context, args: argparse.Namespace) -> ExitCode:
+    try:
+        settings = _scan_settings(ctx, args)
+    except ValueError as exc:
+        log.error("%s", exc)
+        return ExitCode.ERROR
+    spec = EngineSpec(
+        ctx.paths.rules_dir,
+        ctx.paths.cache_dir,
+        ctx.paths.hashes_dir,
+        clamd=ctx.config.scan.clamd,
+        include_test_rules=args.include_test_rules,
+    )
+    with (
+        ctx.console.status("Loading engines (first run compiles the YARA rules)...")
+        if not ctx.quiet
+        else nullcontext()
+    ):
+        scanner = build_scanner(spec, settings)
+    if args.selftest:
+        results = selftest.run(scanner)
+        output.print_selftest(ctx.console, results)
+        return ExitCode.ERROR if any(r.passed is False for r in results) else ExitCode.CLEAN
+
+    targets = args.targets or ["quick"]
+    host = sysinfo.collect()
+    if targets == ["quick"]:
+        mode = "quick"
+        inv = inventory.collect(software=False, listeners=False)
+        roots = quick_targets(persistence=inv.persistence) + [
+            Path(p) for p in ctx.config.scan.extra_quick_paths
+        ]
+    elif targets == ["full"]:
+        mode = "full"
+        roots = full_targets()
+    else:
+        mode = "custom"
+        roots = [Path(t) for t in targets]
+        missing = [str(r) for r in roots if not r.exists()]
+        if missing:
+            log.error("not found: %s", ", ".join(missing))
+            return ExitCode.ERROR
+    exclusions = Exclusions(
+        [*ctx.paths.own_dirs(), *(Path(p) for p in ctx.config.scan.exclude_paths)],
+        ctx.config.scan.exclude_globs,
+    )
+    if settings.virustotal_key:
+        http_cm: Any = HttpClient(JsonCache(ctx.paths.cache_dir))
+        scanner.http = http_cm
+    else:
+        http_cm = nullcontext()
+    progress = Progress(
+        TextColumn("Scanning"),
+        TextColumn("{task.fields[files]:,} files, {task.fields[mb]:,.0f} MB"),
+        TimeElapsedColumn(),
+        TextColumn("{task.fields[path]}"),
+        console=Console(stderr=True, no_color=ctx.console.no_color),
+        transient=True,
+        disable=ctx.quiet,
+    )
+    task = progress.add_task("scan", total=None, files=0, mb=0.0, path="")
+
+    def update(files: int, nbytes: int, path: str) -> None:
+        progress.update(task, files=files, mb=nbytes / 2**20, path=safe_display(path)[-60:])
+
+    with http_cm, progress:
+        result = scanner.scan_paths(roots, exclusions, update, process_spec=spec)
+    output.print_scan(ctx.console, result, ctx.verbose)
+    if args.json:
+        output.write_json(args.json, output.scan_json(result, host, mode))
+        ctx.console.print(f"JSON written to {args.json}", markup=False, highlight=False)
+    return ExitCode.FINDINGS if result.flagged else ExitCode.CLEAN
+
+
 def _edition_id() -> str:
     if sys.platform != "win32":
         return ""
@@ -300,6 +448,7 @@ HANDLERS: dict[str, Callable[[Context, argparse.Namespace], ExitCode]] = {
     "inventory": cmd_inventory,
     "vulns": cmd_vulns,
     "audit": cmd_audit,
+    "scan": cmd_scan,
     **{name: cmd_planned for name in PLANNED},
 }
 

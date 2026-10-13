@@ -50,3 +50,28 @@ Short records of key choices and why they were made. Newest at the bottom.
 17. **The audit is read-only, and secrets stay unread.** The auto-logon check lists value *names* under Winlogon, so a stored `DefaultPassword` is detected without its contents ever being read. A test asserts this. PowerShell is only called with constant scripts, and nothing from the system is interpolated into them.
 
 18. **Python environments are inventoried from metadata files only.** The environment's interpreter is never run, and `.pth` files are never processed, so a malicious package cannot execute during inventory.
+
+19. **oletools without its GPL and crypto extras.** `oletools` declares `pcodedmp` (GPL, only used for P-code disassembly) and `msoffcrypto-tool` (decrypting Office files; pulls in `cryptography`). olevba imports both lazily and works without them, so `uv.lock` excludes them via `override-dependencies`, and pip installs use `--no-deps` from the hashed lock. `pip check` therefore lists them as missing; that is intended.
+
+20. **YARA-X, not libyara, and no pefile.** YARA-X is written in Rust, so parsing hostile files is memory-safe. Its `pe` module provides sections, imports and signatures for the PE heuristics, which removes a dependency. Both chosen rule sets compile without errors (ReversingLabs: 1,240 rules; signature-base: 5,904 rules, using `relaxed_re_syntax` and the LOKI external variables `filename`, `filepath`, `extension`, `filetype` and `owner`). Compiled rules are cached (9.6 MB; reload in about 2.5 s instead of compiling in about 7 s).
+
+21. **YARA match confidence and attribution.**
+    - ReversingLabs rules are malware-family rules, so every match is high-confidence (Malicious).
+    - signature-base rules carry a `score`; matches at 75 or above are high-confidence, lower scores are Suspicious.
+    - Unknown sets default to low confidence.
+    - Every match keeps the rule's author and reference and the set's licence, as the Detection Rule License 1.1 requires.
+
+22. **Code-signature trust needs OS chain validation.** YARA-X's `verified` flag only shows that a signature is internally consistent; a self-signed certificate claiming "O=Microsoft Corporation" also passes it. The allowlist therefore trusts only `Get-AuthenticodeSignature` Status = Valid (which validates the chain and handles catalog signatures) together with a trusted publisher name. File paths go to PowerShell on stdin as JSON, never inside the script. On non-Windows systems, PE signatures are shown but never trusted. Linux files are trusted only if dpkg's MD5 for them still matches.
+
+23. **Processes, not threads, for scanning.** Measurements showed 4 threads were no faster than 1 (YARA-X holds the GIL). The scanner uses a spawn-based process pool, so the start method is the same on every OS. If worker processes cannot start, the scan falls back to the main process and says so, rather than reporting every file as an error. Only flagged, skipped and error results are kept in memory.
+
+24. **EICAR never touches hostguard's files.** Defender treats the EICAR string as malware, so:
+    - the built-in rule matches it as hex bytes;
+    - the self-test rebuilds it in memory from an XOR-encoded constant;
+    - a test scans the source and test trees, including `.pyc` files, for EICAR fragments. That test caught Python constant-folding two halves of a search string into one `.pyc` constant.
+
+    On-disk EICAR tests run only in a pytest temp folder and are skipped if antivirus blocks them.
+
+25. **ClamAV stays local and optional.** hostguard never installs ClamAV. Only Unix sockets or loopback TCP addresses are accepted for clamd. `clamscan` runs once per scan with `--file-list` (built while walking), so hostile file names are never parsed as command-line options and the signature database loads only once.
+
+26. **VirusTotal is evidence, not a verdict.** It is off by default and only looks up hashes of files the local engines already flagged, up to 20 per run, respecting the documented public-API limits (4/min, 500/day, non-commercial). Files are never uploaded. Its result is shown next to the local verdict and never changes it.

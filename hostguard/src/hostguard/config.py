@@ -37,6 +37,17 @@ class ScanConfig:
     exclude_paths: list[str] = field(default_factory=list)
     exclude_globs: list[str] = field(default_factory=list)
     extra_quick_paths: list[str] = field(default_factory=list)
+    heuristics_threshold: int = 60
+    # Valid (OS-verified) signatures from these organisations downgrade heuristic-only hits.
+    trusted_publishers: list[str] = field(
+        default_factory=lambda: [
+            "Microsoft Corporation",
+            "Google LLC",
+            "Mozilla Corporation",
+            "Apple Inc.",
+        ]
+    )
+    clamd: str = "auto"  # "auto" | "off" | a Unix socket path | "tcp:127.0.0.1:3310"
 
 
 @dataclass
@@ -57,6 +68,7 @@ class VulnsConfig:
 class CloudConfig:
     # Hash-only lookups; file contents are never uploaded by this setting.
     virustotal_enabled: bool = False
+    virustotal_max_lookups: int = 20  # per scan; the public API allows 4/minute, 500/day
 
 
 @dataclass
@@ -79,6 +91,20 @@ class Config:
         _range("scan.max_decompressed_mb", s.max_decompressed_mb, 1, 8192)
         _range("scan.max_compression_ratio", s.max_compression_ratio, 1, 10_000)
         _range("scan.hash_workers", s.hash_workers, 0, 64)
+        _range("scan.heuristics_threshold", s.heuristics_threshold, 1, 1000)
+        if s.clamd not in ("auto", "off") and not (
+            s.clamd.startswith("tcp:") or s.clamd.startswith("/")
+        ):
+            raise ConfigError(
+                "scan.clamd must be 'auto', 'off', a Unix socket path or 'tcp:127.0.0.1:PORT'"
+            )
+        if s.clamd.startswith("tcp:") and s.clamd[4:].rpartition(":")[0].strip("[]") not in (
+            "127.0.0.1",
+            "::1",
+            "localhost",
+        ):
+            raise ConfigError("scan.clamd must point to this machine (127.0.0.1, ::1 or localhost)")
+        _range("cloud.virustotal_max_lookups", self.cloud.virustotal_max_lookups, 0, 500)
         if self.quarantine.auto_quarantine not in AUTO_QUARANTINE_MODES:
             raise ConfigError(f"quarantine.auto_quarantine must be one of {AUTO_QUARANTINE_MODES}")
         _range("vulns.cache_ttl_hours", self.vulns.cache_ttl_hours, 0, 24 * 365)
@@ -190,11 +216,16 @@ max_archive_depth = 3       # nested archive levels to open (0 = do not open arc
 max_decompressed_mb = 256   # total decompressed bytes allowed per archive
 max_compression_ratio = 100 # stop if an archive member expands more than this
 follow_symlinks = false     # also applies to Windows junctions/reparse points
-hash_workers = 0            # 0 = automatic
+hash_workers = 0            # scan worker processes; 0 = automatic (up to 4)
 # hostguard's own quarantine, rules, hashes, cache and log folders are always excluded.
 exclude_paths = []          # e.g. ['D:\\VMs']
 exclude_globs = []          # e.g. ['*.iso']
 extra_quick_paths = []      # added to the quick-scan locations
+heuristics_threshold = 60   # heuristic score at which a file becomes Suspicious
+# Valid, OS-verified code signatures from these publishers downgrade heuristic-only hits
+# (never hash, ClamAV or YARA detections).
+trusted_publishers = ['Microsoft Corporation', 'Google LLC', 'Mozilla Corporation', 'Apple Inc.']
+clamd = "auto"              # "auto" | "off" | Unix socket path | "tcp:127.0.0.1:3310" (local only)
 
 [quarantine]
 # "off" = report only | "malicious". Suspicious verdicts are never auto-quarantined.
@@ -207,4 +238,5 @@ offline = false             # true = use only cached data (with a staleness warn
 
 [cloud]
 virustotal_enabled = false  # hash lookups only; needs VT_API_KEY
+virustotal_max_lookups = 20 # per scan (public API: 4 requests/minute, 500/day)
 """

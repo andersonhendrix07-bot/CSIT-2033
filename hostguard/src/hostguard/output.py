@@ -296,3 +296,120 @@ def audit_json(results: list[CheckResult], host: HostInfo, inv: Inventory | None
         checks=[r.to_dict() for r in results],
         skipped=[asdict(s) for s in inv.skipped] if inv else [],
     )
+
+
+# --- scan --------------------------------------------------------------------------------------
+
+
+def print_scan(console: Console, res: Any, verbose: int) -> None:
+    from hostguard.scan.model import safe_display
+
+    et = Table(title="Engines", title_justify="left")
+    for col in ("Engine", "Status", "Detail"):
+        et.add_column(col, overflow="fold")
+    for e in res.engines:
+        et.add_row(
+            e.name, "[green]ready[/]" if e.available else "[yellow]not available[/]", e.detail
+        )
+    console.print(et)
+
+    st = res.stats
+    flagged = res.flagged
+    mal = [i for i in flagged if i.verdict.value == "malicious"]
+    sus = [i for i in flagged if i.verdict.value == "suspicious"]
+    console.print(
+        f"Scanned {st.files_scanned:,} file(s) ({st.bytes_scanned / 2**20:,.0f} MB)"
+        f" + {st.archive_members_scanned:,} archive member(s) in {st.seconds}s: "
+        f"[bold red]{len(mal)} malicious[/], [yellow]{len(sus)} suspicious[/], "
+        f"{st.skipped} skipped, {st.errors} error(s)."
+    )
+    if flagged:
+        t = Table(title="Detections", title_justify="left")
+        for col in ("Verdict", "File", "Why"):
+            t.add_column(col, overflow="fold")
+        for i in flagged:
+            why = "; ".join(
+                f"{h.engine}: {h.name}" + (f" (+{h.score})" if h.score else "")
+                for h in i.hits
+                if h.engine != "allowlist"
+            )
+            style = "bold red" if i.verdict.value == "malicious" else "yellow"
+            t.add_row(f"[{style}]{i.verdict.value}[/]", safe_display(i.path), why)
+        console.print(t)
+        if verbose:
+            for i in flagged:
+                console.print(
+                    f"\n{safe_display(i.path)}  sha256={i.sha256}", markup=False, highlight=False
+                )
+                for h in i.hits:
+                    extra = ", ".join(
+                        x
+                        for x in (
+                            h.author and f"author {h.author}",
+                            h.license and f"licence {h.license}",
+                            h.reference,
+                        )
+                        if x
+                    )
+                    console.print(
+                        f"  [{h.engine}] {h.name}: {h.detail}" + (f" ({extra})" if extra else ""),
+                        markup=False,
+                        highlight=False,
+                    )
+                for n in i.notes:
+                    console.print(f"  note: {n}", markup=False, highlight=False)
+    else:
+        console.print(
+            "[bold green]No malicious or suspicious files found.[/] (hostguard complements, and does not replace, Microsoft Defender.)"
+        )
+    skipped = [i for i in res.items if i.verdict.value in ("skipped", "error")]
+    if skipped:
+        reasons = Counter(i.reason.split(":")[0] if i.reason else "unknown" for i in skipped)
+        console.print("Not scanned: " + "; ".join(f"{n} x {r}" for r, n in reasons.most_common(8)))
+        if verbose:
+            for i in skipped[:200]:
+                console.print(
+                    f"  {i.verdict.value}: {safe_display(i.path)} - {i.reason}",
+                    markup=False,
+                    highlight=False,
+                )
+    for n in res.notes:
+        console.print(f"[yellow]Note:[/] {n}")
+
+
+def scan_json(res: Any, host: HostInfo, mode: str) -> dict[str, Any]:
+    from hostguard.scan.findings import item_to_finding
+
+    findings = [f for f in (item_to_finding(i) for i in res.flagged) if f]
+    return envelope(
+        "scan",
+        host,
+        mode=mode,
+        targets=res.targets,
+        summary={
+            "by_severity": severity_counts(findings),
+            "malicious": sum(1 for i in res.flagged if i.verdict.value == "malicious"),
+            "suspicious": sum(1 for i in res.flagged if i.verdict.value == "suspicious"),
+            "stats": asdict(res.stats),
+        },
+        engines=[asdict(e) for e in res.engines],
+        findings=[f.to_dict() for f in findings],
+        items=[i.to_dict() for i in res.items],
+        notes=res.notes,
+    )
+
+
+def print_selftest(console: Console, results: list[Any]) -> None:
+    t = Table(
+        title="Engine self-test (in memory; nothing is written to disk)", title_justify="left"
+    )
+    for col in ("Engine", "Test", "Result", "Detail"):
+        t.add_column(col, overflow="fold")
+    for r in results:
+        res = (
+            "[green]PASS[/]"
+            if r.passed
+            else ("[red]FAIL[/]" if r.passed is False else "[yellow]n/a[/]")
+        )
+        t.add_row(r.engine, r.test, res, r.detail)
+    console.print(t)

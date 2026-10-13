@@ -28,7 +28,13 @@ def no_network(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Fail any test that tries to open a real network connection (mock it instead)."""
 
     def guard(self: socket.socket, address: Any, *args: Any, **kwargs: Any) -> Any:
-        if self.family in (socket.AF_INET, socket.AF_INET6):
+        # Loopback is this machine (e.g. probing a local clamd); everything else is blocked.
+        host = address[0] if isinstance(address, tuple) else ""
+        if self.family in (socket.AF_INET, socket.AF_INET6) and host not in (
+            "127.0.0.1",
+            "::1",
+            "localhost",
+        ):
             raise NetworkBlockedError(f"network access attempted in a test: {address!r}")
         return real_connect(self, address, *args, **kwargs)
 

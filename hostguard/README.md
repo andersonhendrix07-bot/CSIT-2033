@@ -15,13 +15,13 @@ Primary target: **Windows 11**. The code is kept portable to Linux and macOS whe
 |---|---|---|
 | 1 | Skeleton: CLI, config, logging, safe subprocess wrapper, secrets, tests | **done** |
 | 2 | Inventory, vulnerability matching, configuration audit | **done** |
-| 3 | Scan engines: hash, YARA-X, ClamAV, heuristics | planned |
+| 3 | Scan engines: hash, YARA-X, ClamAV, heuristics | **done** |
 | 4 | Quarantine and updates | planned |
 | 5 | Reports (JSON / HTML / terminal) | planned |
 | 6 | Optional: real-time monitoring, scheduled scans, GUI | needs approval |
 | 7 | Hardening (STRIDE, pip-audit) | planned |
 
-Commands from later phases (`scan`, `quarantine`, `update`, `report`) already appear in `--help`, but they exit with code 2 and say "not implemented yet".
+Commands from later phases (`quarantine`, `update`, `report`) already appear in `--help`, but they exit with code 2 and say "not implemented yet".
 
 ## Install (Windows 11)
 
@@ -33,7 +33,7 @@ You need Python 3.11 or newer. Check with `py -0p`. Nothing is installed outside
 ```powershell
 cd C:\Users\<you>\hostguard-src\CSIT-2033-claude-dazzling-thompson-97srl7\hostguard
 py -3.13 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --require-hashes -r requirements-dev.lock
+.\.venv\Scripts\python.exe -m pip install --no-deps --require-hashes -r requirements-dev.lock
 .\.venv\Scripts\python.exe -m pip install --no-deps --no-build-isolation .
 .\.venv\Scripts\hostguard.exe info
 .\.venv\Scripts\python.exe -m pytest
@@ -42,6 +42,7 @@ py -3.13 -m venv .venv
 How the lock files work:
 - `--require-hashes` makes pip refuse any package whose SHA-256 doesn't match the lock file.
 - `requirements.lock` has only the runtime packages. `requirements-dev.lock` adds pytest, ruff and mypy.
+- `--no-deps` installs exactly the locked set. Two optional `oletools` dependencies are deliberately left out (see DECISIONS.md #19), so `pip check` reports them as missing. That is expected.
 - Both files are generated from `uv.lock`.
 
 The commands call the venv's programs directly, so you don't need `Activate.ps1`. That script is blocked by PowerShell's default execution policy, and hostguard never asks you to change that policy.
@@ -61,7 +62,7 @@ hostguard [--config FILE] [-v|-vv|-q] [--no-color] COMMAND
   inventory                OS build and updates, installed software, listening ports, startup entries
   vulns                    match installed software against known vulnerabilities
   audit                    read-only security configuration checks
-  scan                     (Phase 3)
+  scan [quick|full|PATH...] malware scan (default: quick); --selftest proves detection in memory
   quarantine | update      (Phase 4)
   report                   (Phase 5)
 ```
@@ -123,6 +124,42 @@ The audit never changes a setting; it reports what to change. Checks needing adm
 
 Each check links to Microsoft Learn (or Ubuntu docs) plus the CIS Benchmark landing page. Every reference URL was checked to resolve on 2026-10-12.
 
+### `scan`: malware scanning
+
+```powershell
+.\.venv\Scripts\hostguard.exe scan --selftest                 # in-memory EICAR test; nothing written to disk
+.\.venv\Scripts\hostguard.exe scan                            # quick: Downloads, Desktop, Temp, Startup + startup programs
+.\.venv\Scripts\hostguard.exe scan "C:\Users\me\Downloads\x.zip" -v
+.\.venv\Scripts\hostguard.exe scan full --json scan.json      # all fixed drives (long)
+```
+
+Files are only **read**: never executed, never opened with their associated app. The scanner:
+- does not follow symlinks or junctions;
+- skips OneDrive "online-only" placeholder files, because reading them would download them;
+- skips files over `scan.max_file_size_mb` and always-locked system files, giving a reason for each.
+
+Archives (zip, tar, gz, bz2, xz, and Office files, which are zips) are read **in memory**, never extracted to disk. Depth, total size, compression ratio (zip-bomb) and member-count limits apply. 7z and rar are left to ClamAV.
+
+| Engine | What it does | Verdict it can give |
+|---|---|---|
+| hash | SHA-256 against known-bad lists in `<data>\hashes\*.txt|*.csv` (e.g. a MalwareBazaar export) | **Malicious** |
+| yara | YARA-X with the built-in EICAR rule plus rule sets in `<data>\rules\<set>\` (ReversingLabs: every match high-confidence; signature-base: high if the rule's `score` >= 75) | **Malicious** (high) / **Suspicious** (low) |
+| clamav | `clamd` over a *local* socket (INSTREAM), or one batched `clamscan --file-list` run | **Malicious** |
+| heuristics | Explainable score: PE packers/entropy/injection imports, Office macros (olevba), encoded PowerShell and download cradles, RTLO/double-extension names, executables in user-writable folders | **Suspicious** at score >= 60 |
+| virustotal | Optional, `--virustotal` + `VT_API_KEY`: **hash lookup only** for files already flagged, max 20 per run (public API: 4/min, 500/day) | evidence only, never a verdict |
+
+**Allowlist (known-good).** A valid code signature from a trusted publisher (`scan.trusted_publishers`) can downgrade a **heuristic-only** hit. On Windows, the OS validates the signature (`Get-AuthenticodeSignature`); on Debian/Ubuntu, a file passes if it is unmodified according to dpkg's checksums. The allowlist never overrides a hash, ClamAV or YARA match.
+
+**Worker processes.** Scans use up to 4 worker processes (`scan.hash_workers`). YARA-X holds Python's global lock, so threads would not run in parallel. Each worker loads the compiled rules (about 120 MB for about 7,000 rules). In testing, 903 MB was scanned in 7 s with 4 workers, against 26 s with one.
+
+**Adding rules (until `hostguard update` arrives in Phase 4).** Put a folder of `.yar`/`.yara` files under `<data>\rules\<name>\`. A folder named `reversinglabs*` or `signature-base*` gets the right confidence and licence automatically. Any other set is treated as low-confidence unless it has a `SOURCE.json`, for example `{"confidence": "high", "license": "MIT", "url": "https://..."}`. Rules compile once and are cached; `hostguard scan --selftest` reports how many loaded.
+
+**Hash lists.** Put text files with one SHA-256 per line, or CSV exports, in `<data>\hashes\`. They are indexed (about 32 MB per million hashes) the first time they are used. MalwareBazaar exports need a free abuse.ch Auth-Key; `hostguard update` (Phase 4) will download them.
+
+**ClamAV (optional).** hostguard never installs it for you. On Windows, install ClamAV from the official clamav.net installer and run `freshclam` to download signatures. Then either start `clamd`, listening on `TCPSocket 3310` with `TCPAddr 127.0.0.1` in `clamd.conf`, or let hostguard use `clamscan.exe`, which is slower and loads the database once per scan. hostguard only connects to clamd on this machine (a Unix socket or 127.0.0.1/::1).
+
+**Defender and EICAR.** Microsoft Defender quarantines an EICAR file written to disk, so the self-test builds EICAR in memory. hostguard's own files never contain the EICAR text (a test checks this), and the EICAR rule is written as hex bytes.
+
 ### Files and folders
 
 | What | Windows 11 default |
@@ -164,11 +201,15 @@ src/hostguard/
   models.py       Finding, Evidence, VulnInfo, Severity, Confidence, CheckStatus, ExitCode
   inventory/      windows.py, linux.py, macos.py, python_envs.py (metadata only), ports.py (psutil)
   vulns/          sources.py (OSV/NVD/KEV/EPSS), cpe_map.py, cvss.py, matcher.py (ranking, findings)
+  scan/           targets.py (quick/full, safe walker), archive.py (in-memory, limits), hashdb.py,
+                  scanner.py (orchestration, verdicts), factory.py (worker processes), allowlist.py,
+                  findings.py, selftest.py, engines/ (yara_engine, clamav, heuristics, virustotal)
+  rules/          built-in YARA rules (EICAR as hex; test-only marker rule, opt-in)
   audit/          base.py (framework), windows.py, linux.py, macos.py, common.py
   output.py       terminal tables and JSON (full reports arrive in Phase 5)
 ```
 
-Network access is limited to these hosts (`net.APPROVED_HOSTS`): `services.nvd.nist.gov`, `api.osv.dev`, `www.cisa.gov`, `api.first.org`. Any other host is refused before a connection is opened, and redirects are not followed.
+Network access is limited to these hosts (`net.APPROVED_HOSTS`): `services.nvd.nist.gov`, `api.osv.dev`, `www.cisa.gov`, `api.first.org`, and `www.virustotal.com` (only with `--virustotal`). clamd is only contacted on this machine. Any other host is refused before a connection is opened, and redirects are not followed.
 
 ## Development
 
@@ -190,4 +231,9 @@ uv run mypy
 - **Linux distro results** include many CVEs the distribution tracks but has not fixed yet. These are shown as "no fixed version listed". Kernel CVEs are only checked when a kernel image package is installed.
 - **macOS** checks and inventory are written against Apple's documented tools but have not been run on a Mac.
 - **CIS Benchmark section numbers** are not quoted, because the benchmark PDFs require registration. Each check links the benchmark landing page and the vendor's own guidance.
-- Malware scanning, quarantine, updates and HTML reports are Phases 3 to 5.
+- **The scanner has not yet run on your PC.** It is tested on Linux here and on GitHub's Windows runner (as administrator, with Defender's real-time protection off). There, a CI step downloads the ReversingLabs and signature-base rules and scans signed Windows system binaries.
+- **No hash lists or third-party rules are installed by default** until `hostguard update` (Phase 4); only the built-in EICAR rule and the heuristics are active. Add them by hand as described above if you want them sooner.
+- **Heuristics produce Suspicious, never Malicious,** and some legitimate tools (packed installers, admin scripts) can trigger them. The allowlist only covers OS-validated signatures from trusted publishers.
+- **Windows code-signature checks run only in the allowlist step,** not for every file. On non-Windows systems, Windows PE signatures are shown but never trusted.
+- **7z and rar archives** are only opened if ClamAV is installed.
+- Quarantine, rule and hash updates, and HTML reports are Phases 4 and 5.

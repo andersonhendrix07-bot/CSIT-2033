@@ -142,8 +142,12 @@ def _short(obj: Any, limit: int = 2000) -> str:
 
 
 class PowerShell(Protocol):
-    def run_json(self, script: str, *, timeout: float = 60.0) -> tuple[Any, Evidence]:
-        """Run a constant script ending in ConvertTo-Json; return parsed data and evidence."""
+    def run_json(
+        self, script: str, *, timeout: float = 60.0, stdin: bytes | None = None
+    ) -> tuple[Any, Evidence]:
+        """Run a constant script ending in ConvertTo-Json; return parsed data and evidence.
+
+        `stdin` carries data (e.g. a JSON list of paths); it is never part of the script."""
 
 
 class PowerShellError(Exception):
@@ -166,7 +170,9 @@ def powershell_path() -> str:
 
 
 class RealPowerShell:
-    def run_json(self, script: str, *, timeout: float = 60.0) -> tuple[Any, Evidence]:
+    def run_json(
+        self, script: str, *, timeout: float = 60.0, stdin: bytes | None = None
+    ) -> tuple[Any, Evidence]:
         argv = [
             powershell_path(),
             "-NoLogo",
@@ -176,7 +182,7 @@ class RealPowerShell:
             _PS_PREAMBLE + script,
         ]
         try:
-            r = proc.run(argv, timeout=timeout)
+            r = proc.run(argv, timeout=timeout, input_data=stdin)
         except proc.ToolNotFoundError as exc:
             raise PowerShellError(f"PowerShell not found: {exc}") from exc
         ev = Evidence(source=f"powershell: {script}", output=_short(r.stdout or r.stderr))

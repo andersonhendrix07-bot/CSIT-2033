@@ -57,6 +57,8 @@ APPROVED_HOSTS: dict[str, HostPolicy] = {
         1.0, None, "https://www.cisa.gov/known-exploited-vulnerabilities-catalog"
     ),
     "api.first.org": HostPolicy(0.2, None, "https://api.first.org/epss/"),
+    # VirusTotal public API: 4 requests/minute, 500/day (docs.virustotal.com). Hash lookups only.
+    "www.virustotal.com": HostPolicy(15.5, 15.5, "https://docs.virustotal.com/reference/file-info"),
 }
 
 
@@ -181,9 +183,17 @@ class HttpClient:
         params: Mapping[str, Any] | None = None,
         secret_headers: Mapping[str, str] | None = None,
         ttl: timedelta = timedelta(hours=24),
+        missing_ok: bool = False,
     ) -> FetchResult:
+        """`missing_ok`: an HTTP 404 is a valid answer (data None) rather than an error."""
         return self._request(
-            "GET", url, params=params, body=None, secret_headers=secret_headers, ttl=ttl
+            "GET",
+            url,
+            params=params,
+            body=None,
+            secret_headers=secret_headers,
+            ttl=ttl,
+            missing_ok=missing_ok,
         )
 
     def post_json(
@@ -202,6 +212,7 @@ class HttpClient:
         body: Any,
         secret_headers: Mapping[str, str] | None,
         ttl: timedelta,
+        missing_ok: bool = False,
     ) -> FetchResult:
         policy = check_url(url)
         key = cache_key(method, url, params, body)
@@ -220,7 +231,7 @@ class HttpClient:
             raise FetchError(f"offline mode and no cached copy of {shown}")
 
         try:
-            data = self._fetch(method, url, policy, params, body, secret_headers)
+            data = self._fetch(method, url, policy, params, body, secret_headers, missing_ok)
         except FetchError:
             if cached is not None:
                 data, fetched_at = cached
@@ -240,6 +251,7 @@ class HttpClient:
         params: Mapping[str, Any] | None,
         body: Any,
         secret_headers: Mapping[str, str] | None,
+        missing_ok: bool = False,
     ) -> Any:
         host = urlsplit(url).hostname or ""
         interval = policy.min_interval
@@ -266,6 +278,8 @@ class HttpClient:
                 log.warning("%s returned %d; retrying in %.1fs", host, resp.status_code, wait)
                 self._sleep(wait)
                 continue
+            if resp.status_code == 404 and missing_ok:
+                return None
             if resp.status_code != 200:
                 raise FetchError(f"{host} returned HTTP {resp.status_code}")
             if len(resp.content) > MAX_RESPONSE_BYTES:

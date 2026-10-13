@@ -64,7 +64,9 @@ def resolve_executable(name: str) -> str:
     return str(resolved)
 
 
-def run(argv: Sequence[str], *, timeout: float = DEFAULT_TIMEOUT) -> ProcResult:
+def run(
+    argv: Sequence[str], *, timeout: float = DEFAULT_TIMEOUT, input_data: bytes | None = None
+) -> ProcResult:
     if isinstance(argv, str | bytes) or not argv:
         raise TypeError("argv must be a non-empty sequence of strings, not a shell string")
     if not all(isinstance(a, str) for a in argv):
@@ -79,7 +81,8 @@ def run(argv: Sequence[str], *, timeout: float = DEFAULT_TIMEOUT) -> ProcResult:
     try:
         cp = subprocess.run(  # noqa: S603 - list argv, shell=False, resolved absolute exe
             full,
-            stdin=subprocess.DEVNULL,
+            stdin=None if input_data is not None else subprocess.DEVNULL,
+            input=input_data,
             capture_output=True,
             timeout=timeout,
             shell=False,

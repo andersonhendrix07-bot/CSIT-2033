@@ -63,9 +63,13 @@ class FakePowerShell:
     def __init__(self, responses: dict[str, Any] | None = None) -> None:
         self.responses = responses or {}
         self.calls: list[str] = []
+        self.stdin: list[bytes | None] = []
 
-    def run_json(self, script: str, *, timeout: float = 60.0) -> tuple[Any, Evidence]:
+    def run_json(
+        self, script: str, *, timeout: float = 60.0, stdin: bytes | None = None
+    ) -> tuple[Any, Evidence]:
         self.calls.append(script)
+        self.stdin.append(stdin)
         for needle, result in self.responses.items():
             if needle in script:
                 ev = Evidence(f"powershell: {script}", str(result)[:200])

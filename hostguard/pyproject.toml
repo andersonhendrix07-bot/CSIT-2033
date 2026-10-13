@@ -20,9 +20,11 @@ classifiers = [
 # Runtime dependencies are pinned exactly; uv.lock pins the full tree with hashes.
 dependencies = [
     "httpx==0.28.1",
+    "oletools==0.60.2",
     "platformdirs==4.13.0",
     "psutil==7.2.2",
     "rich==15.0.0",
+    "yara-x==1.21.0",
 ]
 
 [project.optional-dependencies]
@@ -41,12 +43,23 @@ dev = [
     "types-psutil==7.2.2.20260906",
 ]
 
+[tool.uv]
+# oletools declares two dependencies hostguard never uses: pcodedmp (GPL; only imported for
+# P-code disassembly) and msoffcrypto-tool (only for decrypting Office files; pulls in
+# `cryptography`). olevba imports both lazily, so they are excluded from the lock.
+override-dependencies = [
+    "pcodedmp; sys_platform == 'never'",
+    "msoffcrypto-tool; sys_platform == 'never'",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/hostguard"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+# oletools 0.60.2 uses pyparsing APIs that newer pyparsing marks deprecated (harmless).
+filterwarnings = ["ignore::DeprecationWarning:oletools.*"]
 markers = [
     "integration: end-to-end tests that touch the real filesystem",
 ]
@@ -59,7 +72,9 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "PTH", "N"]
 # Line length is enforced by `ruff format`; E501 would only flag long user-facing strings.
-ignore = ["E501"]
+# PTH100: os.path.abspath is deliberate - Path.resolve() would follow symlinks, which the
+#         scanner must not do. PTH123: plain open() on str paths (incl. \\?\ long paths) is fine.
+ignore = ["E501", "PTH100", "PTH123"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S104", "S603", "S108"]
@@ -69,3 +84,7 @@ python_version = "3.11"
 strict = true
 mypy_path = "src"
 packages = ["hostguard"]
+
+[[tool.mypy.overrides]]
+module = ["oletools.*"]
+ignore_missing_imports = true
